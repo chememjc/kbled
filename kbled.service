@@ -1,0 +1,17 @@
+# kbled - Keyboard LED per-key LED backlight control for IT-829x based controllers
+# https://github.com/chememjc/kbled
+# 
+[Unit]
+Description=kbled Service
+After=graphical.target
+
+[Service]
+ExecStart=/usr/bin/kbled
+Restart=always
+User=root
+Group=root
+StandardOutput=null
+StandardError=journal
+
+[Install]
+WantedBy=graphical.target

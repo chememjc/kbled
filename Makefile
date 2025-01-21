@@ -17,7 +17,7 @@ CFLAGS = -D$(TYPE) -Wall -Wextra -O3 -g  #add/remove -g to toggle gdb debugging 
 TARGET1 = kbled
 TARGET2 = kbledclient
 TARGET3 = semsnoop
-INITSCRIPT = kbled.conf
+INITSCRIPT = kbled.service
 
 # Source files
 SRC1 = daemon.c it829x.c keymap.c kbstatus.c sharedmem.c
@@ -35,7 +35,7 @@ LIBS2 =
 LIBS3 = 
 
 # Define the installation directories
-INIT_DIR = /etc/init
+INIT_DIR = /etc/systemd/system
 BIN_DIR = /usr/bin
 
 # Default target
