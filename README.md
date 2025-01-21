@@ -1,10 +1,10 @@
 # Individually Addressable Keyboard LED Control Daemon
 ## Keyboard LED update program for ITE IT-829x based keyboard controllers
-I have really liked my System76 Bonobo WS (bonw15) laptop but have always found it extremely annoying when I would accidentally hit the cap lock key and wouldn't know until I started typing since there is no visual indication.  The keyboard illumination controls from System76 allow you to turn the backlight on/off, the brightness up/down and cycle the colors through a predefined pallete.  If you dig further into `/sys/class/leds/system76_acpi\:\:kbd_backlight/` you can change the RGB color and brightness but there is still no mechanism to control individual LEDS.  
+I have really like my System76 Bonobo WS (bonw15) laptop but have always found it extremely annoying when I would accidentally hit the cap lock key and wouldn't know until I started typing since there is no visual indication.  The keyboard illumination controls from System76 allow you to turn the backlight on/off, the brightness up/down and cycle the colors through a predefined pallete.  If you dig further into `/sys/class/leds/system76_acpi\:\:kbd_backlight/` you can change the RGB color and brightness but there is still no mechanism to control individual LEDS.  
 
 This still didn't solve my problem, so I set out to find a way to bypass the System76 driver and write my own.  I stumbled across a similar project where [matheusmoreira](https://github.com/matheusmoreira/ite-829x) decoded the signals between Clevo's windows based keyboard control software and the IT829x controller on his Clevo PA70ES (same chipset) to individually change keyboard LED states.  Using this, I was able to prove that it worked on my laptop as well, though its functionality was fairly limited.  I decided to use the decoded commands he found to write a lightweight daemon that could be loaded at boot time to handle the keyboard backlight and change the caps lock, scroll lock and num lock keys in addition to some other features I thought would be neat to have.
 
-The end result is this project that consists of two main programs, `kbled` and `kbledclient` along with a tool I called `semfree` that checks the state of semaphores on the system.  
+The end result is this project that consists of two main programs, `kbled` and `kbledclient` along with a tool I called `semsnoop` that checks the state of semaphores on the system.  
 
 ## Compatibility
 This software should work with any linux system with a ITE IT-829x USB keyboard controller.  If you are unsure, just look for device ID `048d:8910` with lsusb.  If it shows up on the list, then there is a good chance this software will work.  I have tested this with a System76 Bonobo WS (bonw15) laptop.  It is manufactured by Clevo as an X370SNW.  Here is how the device appears when I run `lsusb`:
@@ -48,15 +48,15 @@ Usage: kbledclient [parameters...]
  --speed                      Change update speed (0-2147483647 ms) default= 100 ms
  --dump                       Show contents of shared memory
  --dump+                      Show contents of shared memory with each key's state
- --silent					  supress output on stdout
+ 
  --help                       Display this message
  Where <Red> <Grn> <Blu> are 0-255
 ```
 
-### `semfree` utility for checking semaphore status:
+### `semsnoop` utility for checking semaphore status:
 I'll confess I basically just asked ChatGPT to write me a c program to check the status of the semaphore I used in `kbled` and `kbledclient` to aid in debugging.  Call it without arguments to get the syntax:
 ```text
-Usage: semfree <sem_name> <action>
+Usage: semsnoop <sem_name> <action>
 Actions:
   inc - Increment the semaphore
   dec - Decrement the semaphore
@@ -64,15 +64,15 @@ Actions:
 ```
 This will work with any semaphore, so I included it in case anyone else would find it useful.  Here is an example of how I used it during debugging for the named semaphore `/kbled_semaphore`:
 ```bash
-mcurtis@wopr:~$ semfree /kbled_semaphore val
+mcurtis@wopr:~$ semsnoop /kbled_semaphore val
 Semaphore value: 0
-mcurtis@wopr:~$ semfree /kbled_semaphore inc
+mcurtis@wopr:~$ semsnoop /kbled_semaphore inc
 Semaphore incremented successfully.
-mcurtis@wopr:~$ semfree /kbled_semaphore val
+mcurtis@wopr:~$ semsnoop /kbled_semaphore val
 Semaphore value: 1
-mcurtis@wopr:~$ semfree /kbled_semaphore dec
+mcurtis@wopr:~$ semsnoop /kbled_semaphore dec
 Semaphore incremented successfully.
-mcurtis@wopr:~$ semfree /kbled_semaphore val
+mcurtis@wopr:~$ semsnoop /kbled_semaphore val
 Semaphore value: 0
 ```
 
@@ -97,6 +97,8 @@ sudo make install
 sudo kbled &
 ```
 Optionally you can install it manually if you would prefer.  Just copy `kbled` and `kbledclient` to `/usr/bin` and copy `kbled.conf` to `/etc/init`.
+### Uninstalling
+To uninstall, you can run `sudo make uninstall` from the project directory and all of the installed files will be removed.  Alternately you can manually remove  `/usr/bin/kbled`, `/usr/bin/kbledclient`, `/usr/bin/semsnoop` and  `/etc/init/kbled.conf`.
 
 ## Hotkeys
 The originally mapped hotkeys will cause issues with this software (segfaults sometimes) since they access the USB device.  I still haven't figured out how that side of things works to intercept the signals (see the Background section for more information/research).  To get around this, you can remove the mapping of those keys in the EC controller by using System76's `system76-keyboard-configurator` and map your own hotkeys in your desktop environment.  I will provide the steps I used here for PopOS! 22.04 LTS.
@@ -109,19 +111,19 @@ sudo apt install system76-keyboard-configurator
 ```
 
 Run it from the command line by typing `system76-keyboard-configurator`, it will ask for your password to run it as root since you will be modifying the settings on the embedded controller (EC).  Click on the button on the 'Configure Keyboard' button in the bottom center.  (note: the print screen button is highlighted since I pressed that key for the screen capture)
-![1e8ddc91ed5d6cb03fbc0d80dff271f0.png](:/4173e394f9594abb9614b91972a675c5)
+![system76-keyboard-configurator](img/system76-keyboard-configurator-main.png)
 Next, click on the 'Layer 2' button on the top middle right to get to where the LED keys are mapped:
-![c0c3cdc6402745f6ec84ef1d3fa3ed00.png](:/a5f0c8de7a1c464ebadc3770ab4d51a0)
+![Switching to keyboard layer 2](img/system76-keyboard-configurator-layer2.png)
 For each of the 'LED Color' 'LED On Off' 'LED Darken' 'LED Brightness' keys, click on the key (it will be outlined when you click) and remap it back to the respective keys from the 'Numpad' section by clicking on them.  They should look like this afterwards:
-![da4c0a31bd6ad9311302e1c52676c518.png](:/7c879972ee9945979c2c35afe0ce098e)
+![Updated keyboard map](img/system76-keyboard-configurator-updated.png)
 
 ### Adding new LED hotkey mappings
 This might be a bit different in other distributions than PopOS! 22.04 LTS, but you should be able to do something through a similar set of steps.  Go into settings and select keyboard from the list on the left.  Then click on 'View and Customize Shortcuts' on the bottom of the right frame:
-![69282af8cfa4a558834bc4cff2416bc6.png](:/c134948379d94bf2913a15bdab736f1c)
+![Keyboard settings](img/settings-keyboard.png)
 From there a 'Keyboard Shortcuts' window will open, scroll to the bottom and select 'Custom Shortcuts':
-![6101d95fbf9c8fa0b998ccfaaf0776fd.png](:/eb47076018ee4dca8fb5121432ef9311)
+![Keyboard shortcut window](img/settings-keyboard-shortcuts.png)
 Click on the plus button on the bottom, this will open another window, 'Add Custom Shortcut', where you can assign it a name, command and shortcut sequence:
-![c324ffc885d49140b5ba7a1ad411b726.png](:/5192e2a9ceda44e0b0dcb0107083c99c)
+![Keyboard shortcut edit window](img/settings-keyboard-shortcut.png)
 Here is how I have it setup on my computer.  When clicking on the 'Set Shortcut' you can't seem to include the function key as a modifier so I had to compromise and use the control key.  See the 'More Detail' section for an explanation of why this is the case and how I might end up trying to get it to work with the function key in the future.  In case you're worried (I was) the - key and + key on the main keyboard are different than the ones on the numpad so it won't conflict with zooming in and out in a web browser with `Ctrl =` and `Ctrl -`.
 
 *Note: if you are running `kbledclient` from your home directory rather than /usr/bin, you need to specify a fully path and not a relative path.  Ex: use `/home/mcurtis/kbled/kbledclient --silent -b-` instead of `~/kbled/kbledclient --silent -b-`*
@@ -158,4 +160,4 @@ sudo apt install libhidapi-dev libx11-dev libxkbfile-dev libevdev-dev
 ```
 
 # License
-I really couldn't care less here... public domain I guess?  If you like it and want to use it, great!  If you want to modify it, great!  If you want to use it in something commercial, great!   An attribution would be nice but even that is optional.  As you would expect from this personal project, I make no guarantees that it works or won't somehow brick your computer, though I highly doubt it and it works great on my computer.  I used the Wireshark captures from [matheusmoreira](https://github.com/matheusmoreira/ite-829x) to make this work, but otherwise it all came from me except the `semfree` utility which came from ChatGPT.  
+I really couldn't care less here... public domain I guess?  If you like it and want to use it, great!  If you want to modify it, great!  If you want to use it in something commercial, great!   An attribution would be nice but even that is optional.  As you would expect from this personal project, I make no guarantees that it works or won't somehow brick your computer, though I highly doubt it and it works great on my computer.  I used the Wireshark captures from [matheusmoreira](https://github.com/matheusmoreira/ite-829x) to make this work, but otherwise it all came from me except the `semsnoop` utility which came from ChatGPT.  
