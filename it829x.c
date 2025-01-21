@@ -1,7 +1,8 @@
-/* System76 bonw15 (Clevo X370)
- * Individually addressable keyboard LED daemon
+/* kbled IT829x keyboard backilight control
+ * https://github.com/chememjc/kbled
  * Michael Curtis 2025-01-17
  * 
+ * USB IT829x USB interface functions
  * Based off of USB protocol decode from https://github.com/matheusmoreira/ite-829x/tree/master
  */
 

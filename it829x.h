@@ -1,7 +1,11 @@
-/* System76 bonw15 (Clevo X370SNW)
- * USB individual RGB key backlight control
- *
+/* kbled IT829x keyboard backilight control
+ * https://github.com/chememjc/kbled
+ * Michael Curtis 2025-01-17
+ * 
+ * USB IT829x USB interface functions
+ * Based off of USB protocol decode from https://github.com/matheusmoreira/ite-829x/tree/master
  */
+ 
 #ifndef IT829X_H
 #define IT829X_H
 

@@ -16,21 +16,47 @@ CFLAGS = -D$(TYPE) -Wall -Wextra -O3 -g  #add/remove -g to toggle gdb debugging 
 # Target executable
 TARGET1 = kbled
 TARGET2 = kbledclient
+TARGET3 = semsnoop
+INITSCRIPT = kbled.conf
 
 # Source files
-SRC1 = main.c it829x.c keymap.c kbstatus.c sharedmem.c
-SRC2 = userspace.c
+SRC1 = daemon.c it829x.c keymap.c kbstatus.c sharedmem.c
+SRC2 = client.c
+SRC3 = semsnoop.c
 
 # Object files
 OBJ1 = $(SRC1:.c=.o)
 OBJ2 = $(SRC2:.c=.o)
+OBJ3 = $(SRC3:.c=.o)
 
 # Libraries to link
 LIBS1 = -lhidapi-libusb $(XTRALIBS)
 LIBS2 = 
+LIBS3 = 
+
+# Define the installation directories
+INIT_DIR = /etc/init
+BIN_DIR = /usr/bin
 
 # Default target
-all: $(TARGET1) $(TARGET2)
+all: $(TARGET1) $(TARGET2) $(TARGET3)
+
+# Installation target
+install: all
+	# Copy the kbled.conf script to /etc/init/
+	install -m 644 $(INITSCRIPT) $(INIT_DIR)/$(INITSCRIPT)
+	# Copy the executables to /usr/bin
+	install -m 755 $(TARGET1) $(BIN_DIR)/$(TARGET1)
+	install -m 755 $(TARGET2) $(BIN_DIR)/$(TARGET2)
+	install -m 755 $(TARGET3) $(BIN_DIR)/$(TARGET3)
+
+uninstall: all
+	# remove the kbled.conf script from /etc/init/
+	rm -f $(INIT_DIR)/$(INITSCRIPT)
+	# remove the executables from /usr/bin
+	rm -f $(BIN_DIR)/$(TARGET1)
+	rm -f $(BIN_DIR)/$(TARGET2)
+	rm -f $(BIN_DIR)/$(TARGET3)
 
 # Rule to build the TARGET1 executable
 $(TARGET1): $(OBJ1)
@@ -39,6 +65,10 @@ $(TARGET1): $(OBJ1)
 # Rule to build the TARGET2 executable
 $(TARGET2): $(OBJ2)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS2)
+	
+# Rule to build the TARGET2 executable
+$(TARGET3): $(OBJ3)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS3)
 
 # Pattern rule for object files
 %.o: %.c
@@ -46,6 +76,6 @@ $(TARGET2): $(OBJ2)
 
 # Clean up build artifacts
 clean:
-	rm -f $(TARGET1) $(TARGET2) *.o
+	rm -f $(TARGET1) $(TARGET2) $(TARGET3) *.o
 
 .PHONY: all clean

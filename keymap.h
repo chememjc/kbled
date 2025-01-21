@@ -1,11 +1,12 @@
-/* System76 bonw15 (Clevo X370SNW)
- * keymap -> RGB LED mapping
+/* kbled IT829x keyboard backilight control
+ * https://github.com/chememjc/kbled
  * Michael Curtis 2025-01-17
- *
+ * 
  * basic keymap found in System76 EC firmware layout (https://github.com/system76/ec/blob/master/src/keyboard/system76/15in_102/keymap/default.c)
  * Keys with mulitple LEDs, 2x unless specified (backspace, tab, keypad plus, caps lock, enter, lshift, rshift, keypad enter, lctrl, spacebar (4x), rctrl)
  * These cases were added to address each LED individually with L and R modifiers for left and right except the space where they are numbered 1-4 from left to right
  */
+ 
 #ifndef KEYMAP_H
 #define KEYMAP_H
 

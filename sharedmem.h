@@ -1,5 +1,7 @@
-/* System76 bonw15 (Clevo X370SNW)
- * USB individual RGB key backlight control
+/* kbled IT829x keyboard backilight control
+ * https://github.com/chememjc/kbled
+ * Michael Curtis 2025-01-17
+ * 
  * header for talking between daemon process and user update function
  */
 #ifndef SHAREDMEM_H

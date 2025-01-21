@@ -1,6 +1,7 @@
-/* System76 bonw15 (Clevo X370)
- * Individually addressable keyboard LED daemon
+/* kbled IT829x keyboard backilight control
+ * https://github.com/chememjc/kbled
  * Michael Curtis 2025-01-17
+ * 
  * shared memory (daemon side) for dynamic state change.
  */
  

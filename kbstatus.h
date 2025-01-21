@@ -1,7 +1,10 @@
-/* System76 bonw15 (Clevo X370SNW)
- * USB individual RGB key backlight control
- * Subroutines for determining caps lock, num lock and scroll lock state
+/* kbled IT829x keyboard backilight control
+ * https://github.com/chememjc/kbled
+ * Michael Curtis 2025-01-17
+ * 
+ * Functions for determining caps lock, num lock and scroll lock state
  */
+ 
 #ifndef KBSTATUS_H
 #define KBSTATUS_H
 
