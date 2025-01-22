@@ -42,13 +42,18 @@
 #define SM_EFFECT_SNAKE     6
 
 #define SEM_NAME "/kbled_semaphore"  // Semaphore name to synchronize access to shared memory
-#define SEM_TIMEOUT_MS 1000 //semaphore timeout value 
+#define SEM_TIMEOUT_MS 1000 //semaphore timeout value; if blocked for longer than this time, ignore the semaphore and proceed
+
+//shared memory verbosity options
+#define SM_VERBOSE 1
+#define SM_QUIET   0
 
 // The structure of the shared memory segment
 // Both programs can read from and write to this structure
 struct shared_data {
     uint16_t status; //status flag, each binary bit represents a changed entry in the shared array
-    double lastcputime; //contains the time in seconds it took to run through the last loop
+    double lastcputime; //contains the time in seconds it took to run through the last loop where a change was made to the keyboard LEDs
+    double idlecputime; //contains the time in seconds it took to run through a loop where nothing was updated
     uint16_t scanspeed; //scan speed
     unsigned char brightness; //absolute brightness 0-10
     char brightnessinc;  //brightness increment +1 or -1, 0 for unchanged
@@ -64,9 +69,11 @@ struct shared_data {
 extern struct shared_data *shm_ptr;
 
 
-int sharedmem_init();
-int sharedmem_close();
-void sharedmem_lock();
-void sharedmem_unlock();
+int sharedmem_masterinit(char verbose);  //initialize master for shared memory and semaphore (allocates shared memory and semaphore)
+int sharedmem_slaveinit(char verbose);   //initialize master for shared memory and semaphore (uses already allocated shared memory and semaphore)
+int sharedmem_masterclose(char verbose); //master: disconnect from shared memory and semaphore and deallocate
+int sharedmem_slaveclose(char verbose);  //slave: disconeect from shared memory but do not deallocate shared memory or semaphore
+int sharedmem_lock();       //acquire a lock on shared memory, timeout after SEM_TIMEOUT_MS milliseconds (decrement semaphore)
+void sharedmem_unlock();     //relinquish a lock on shared memory (increment semaphore)
 
 #endif // SHARED_MEMORY_H

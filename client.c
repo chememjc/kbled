@@ -14,8 +14,6 @@
 #include <ctype.h>
 #include <semaphore.h>
 #include <fcntl.h>
-#include <time.h>  //needed for the semaphore timeout code
-#include <errno.h> //needed for the semaphore timeout code
 #include "sharedmem.h"
 
 void print_usage(char *program_name) {
@@ -74,40 +72,6 @@ void printstructure(struct shared_data *data, char type) {
             printf("Key[%d]:(%u,%u,%u)%u\n", j,data->key[j][0],data->key[j][1],data->key[j][2],data->key[j][3]);
         }
     }
-}
-
-int sem_wait_timed(sem_t *sem, unsigned int tmsec) {
-    if (sem == NULL) {
-        fprintf(stderr, "NULL sem_t sent to sem_wait_timed.\n");
-        return 1;
-    }
-    struct timespec ts;
-    if (clock_gettime(CLOCK_REALTIME, &ts) == -1) {
-        perror("clock_gettime");
-        return 1;
-    }
-    // Convert milliseconds to seconds and nanoseconds
-    ts.tv_sec += tmsec / 1000;            // Add full seconds
-    ts.tv_nsec += (tmsec % 1000) * 1000000; // Add the remaining milliseconds as nanoseconds
-    // Normalize time if nanoseconds exceed 1 second
-    if (ts.tv_nsec >= 1000000000) {
-        ts.tv_sec += 1;
-        ts.tv_nsec -= 1000000000;
-    }
-    // Attempt to wait on the semaphore with the timeout
-    if (sem_timedwait(sem, &ts) == -1) {
-        if (errno == ETIMEDOUT) {
-            // Semaphore not acquired due to timeout
-            perror("sem_timedwait");
-            return 1;
-        } else {
-            // Other error
-            perror("sem_timedwait");
-            return 1;
-        }
-    }
-    // Semaphore successfully acquired
-    return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -330,59 +294,10 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    key_t shm_key;
-    int shm_id;
-    struct shared_data *shm_ptr;
-    FILE *file;
-    sem_t *sem;
-
-    // Read the token from the file
-    file = fopen(TOKEN_FILE, "r");
-    if (!file) {
-        perror("fopen failed");
-        exit(EXIT_FAILURE);
-    }
-
-    if (fscanf(file, "%d", &shm_key) != 1) {
-        perror("fscanf failed");
-        fclose(file);
-        exit(EXIT_FAILURE);
-    }
-    fclose(file);
-    
-    if(shm_key==0){
-        printf("The kbled daemon is not running.  Start it and try again.\n");
-        return 0;
-    }
-
-    // Access the shared memory segment using the key
-    shm_id = shmget(shm_key, sizeof(struct shared_data), 0666);
-    if (shm_id == -1) {
-        perror("shmget failed");
-        printf("The kbled shared memory is not accessible, check permissions?\n");
-        exit(EXIT_FAILURE);
-    }
-
-    // Attach to the shared memory segment
-    shm_ptr = shmat(shm_id, NULL, 0);
-    if (shm_ptr == (void *)-1) {
-        perror("shmat failed");
-        exit(EXIT_FAILURE);
-    }
-
-    // Open the semaphore for mutual exclusion (it should already exist)
-    printf("Opening semaphore...\n");
-    sem = sem_open(SEM_NAME, 0);
-    if (sem == SEM_FAILED) {
-        perror("sem_open failed");
-        printf("Could not open semaphore: %s\n", SEM_NAME);
-        exit(EXIT_FAILURE);
-    }
-    printf("Semaphore opened\n");
-    // Wait (lock) the semaphore before accessing shared memory and making updates
-    printf("Locking...\n");
-    sem_wait_timed(sem,SEM_TIMEOUT_MS); //lock semaphore
-    printf("Locked\n");
+    sharedmem_slaveinit(verbose);
+    if(verbose)printf("Semaphore opened\n");
+    // Wait (lock) the semaphore before accessing shared memory and making updates;
+    sharedmem_lock(); //lock semaphore **************************************************************************************
     if(new_ptr.status!=0) shm_ptr->status=new_ptr.status;
     if(new_ptr.status & SM_B)   shm_ptr->brightness=new_ptr.brightness;
     if(new_ptr.status & SM_BI)  shm_ptr->brightnessinc=new_ptr.brightnessinc;
@@ -395,16 +310,12 @@ int main(int argc, char *argv[]) {
     if(new_ptr.status & SM_KEY) for(i=0; i<4; i++) for(int j=0; j<NKEYS; j++) if(new_ptr.key[3]!=0)shm_ptr->key[j][i]=new_ptr.key[j][i];
     if(new_ptr.status & SM_SSPD)   shm_ptr->scanspeed=new_ptr.scanspeed;
     if(memdump) printstructure(shm_ptr,memdump);
-    if(cputime) printf("Last kbled daemon LED update time: %f milliseconds\n", shm_ptr->lastcputime*1000.0);
-    printf("Unlocking...\n");
-    sem_post(sem); //unlock semaphore
-    printf("Unlocked\n");
-
-    // Detach from the shared memory segment
-    if (shmdt(shm_ptr) == -1) {
-        perror("shmdt failed");
-        exit(EXIT_FAILURE);
-    }
+    if(cputime) printf("Last kbled daemon LED update time: %f ms, idle loop time %f ns\n", shm_ptr->lastcputime*1000.0,shm_ptr->idlecputime*1000.0);
+    sharedmem_unlock(); //unlock semaphore  *********************************************************************************************************
+    if(verbose)printf("Semaphore closed\n");
+    
+    sharedmem_slaveclose(verbose);
+    if(verbose)printf("Detached from shared memory\n");
 
     return 0;
 }

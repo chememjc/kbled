@@ -74,7 +74,7 @@ void sighandle(int sig, siginfo_t *info, void *context) {
     }
     sd_notify(0, "STATUS=kbled is shutting down...");
     //release the shared memory, close the semaphore and remove the shared memory ftok token
-    sharedmem_close();
+    sharedmem_masterclose(SM_VERBOSE);
     sd_notify(0, "STATUS=kbled is stopped");
     exit(0);  // Exit the program since everything should be cleaned up
 }
@@ -133,10 +133,10 @@ int main(int argc, char **argv){
     
     //now bring up the shared memory interface to get signals from the client
     printf("Setup shared memory...\n");
-    if(sharedmem_init()!=0){
+    if(sharedmem_masterinit(SM_VERBOSE)!=0){
         sd_notify(0, "STATUS=kbled could not allocate shared memory, check permissions.  Exiting...");
         printf("Could not allocate shared memory, check permissions.  Exiting...\n");
-        sharedmem_close(); //try to clean up shared memory and semaphore in case some of it succeeded
+        sharedmem_masterclose(SM_VERBOSE); //try to clean up shared memory and semaphore in case some of it succeeded
         return 1; //let systemd know that there was a problem
     }
     sharedmem_lock(); //lock the structure from other processes
@@ -244,6 +244,6 @@ int main(int argc, char **argv){
     }
     printf("Exiting... something yet to be discovered did not go as planned and broke out of the while(1) loop!\n");
     sd_notify(0, "STATUS=kbled encountered an unknown fault and is shutting down");
-    sharedmem_unlock();
+    sharedmem_masterclose(SM_VERBOSE);
     return 1; //tells systemd that there was a fault
 }

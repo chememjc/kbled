@@ -11,7 +11,7 @@ CC = gcc
 TYPE = EVENT
 XTRALIBS = -levdev # for EVENT this should be -levdev
 
-CFLAGS = -D$(TYPE) -Wall -Wextra -O3 -g  #add/remove -g to toggle gdb debugging information
+CFLAGS = -D$(TYPE) -Wall -Wextra -O3 #add/remove -g to toggle gdb debugging information
 
 # Target executable
 TARGET1 = kbled
@@ -21,7 +21,7 @@ INITSCRIPT = kbled.service
 
 # Source files
 SRC1 = daemon.c it829x.c keymap.c kbstatus.c sharedmem.c
-SRC2 = client.c
+SRC2 = client.c sharedmem.c
 SRC3 = semsnoop.c
 
 # Object files
@@ -49,7 +49,7 @@ check-root:
 	fi
 
 # Installation target
-install: check-root all
+install: check-root
 	# Copy the kbled.conf script to /etc/init/
 	install -m 644 $(INITSCRIPT) $(INIT_DIR)/$(INITSCRIPT)
 	# Copy the executables to /usr/bin
@@ -60,7 +60,7 @@ install: check-root all
 	@echo To enable on startup run:  sudo systemctl enable kbled
 	@echo To start kbled now run:\ \ \ sudo systemctl start kbled
 
-uninstall: check-root all
+uninstall: check-root
 	#stop the service if it is running and disable it
 	@systemctl is-active --quiet kbled && systemctl stop kbled || true
 	@systemctl is-enabled --quiet kbled && systemctl disable kbled || true
@@ -91,4 +91,4 @@ $(TARGET3): $(OBJ3)
 clean:
 	rm -f $(TARGET1) $(TARGET2) $(TARGET3) *.o
 
-.PHONY: all clean install uninstall
+.PHONY: all clean install uninstall kbled kbledclient semsnoop
