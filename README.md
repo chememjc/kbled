@@ -1,6 +1,6 @@
 # Individually Addressable Keyboard LED Control Daemon
 ## Keyboard LED update program for ITE IT-829x based keyboard controllers
-I have really like my System76 Bonobo WS (bonw15) laptop but have always found it extremely annoying when I would accidentally hit the cap lock key and wouldn't know until I started typing since there is no visual indication.  The keyboard illumination controls from System76 allow you to turn the backlight on/off, the brightness up/down and cycle the colors through a predefined pallete.  If you dig further into `/sys/class/leds/system76_acpi\:\:kbd_backlight/` you can change the RGB color and brightness but there is still no mechanism to control individual LEDS.  
+I really like my System76 Bonobo WS (bonw15) laptop but have always found it extremely annoying when I accidentally hit the `Caps Lock` key and wouldn't know until I started typing since there is no visual indication.  The keyboard illumination controls from System76 allow you to turn the backlight on/off, the brightness up/down and cycle the colors through a predefined pallete.  If you dig further into `/sys/class/leds/system76_acpi\:\:kbd_backlight/` you can change the RGB color and brightness but there is still no mechanism to control individual LEDS.  
 
 This still didn't solve my problem, so I set out to find a way to bypass the System76 driver and write my own.  I stumbled across a similar project where [matheusmoreira](https://github.com/matheusmoreira/ite-829x) decoded the signals between Clevo's windows based keyboard control software and the IT829x controller on his Clevo PA70ES (same chipset) to individually change keyboard LED states.  Using this, I was able to prove that it worked on my laptop as well, though its functionality was fairly limited.  I decided to use the decoded commands he found to write a lightweight daemon that could be loaded at boot time to handle the keyboard backlight and change the caps lock, scroll lock and num lock keys in addition to some other features I thought would be neat to have.
 
@@ -19,7 +19,7 @@ Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
 ```
 
 ### `kbled` daemon:
-This program is designed to be launched during system startup with the included script, though it can be run manually to verify it works before installation.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock will change to when active) by specifying them from the command line. Example: `sudo kbled 255 0 0 0 255 0 0` to set the backlight color to red and the focus color to green.  The default if nothing specified is a red backlight and a green focus color.  
+This program is designed to be launched during system startup by systemd with the included script, though it can be run manually to verify it works before installation.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock will change to when active) by specifying them from the command line. Example: `sudo kbled 255 0 0 0 255 0 0` to set the backlight color to red and the focus color to green.  The default if nothing specified is a red backlight and a green focus color.  
 
 It sets up a shared memory space that `kbledclient` (called from an unprivileged account) can interact with to modify the keyboard led settings along with a semaphore for accessing the array.  The default scan time is 100 ms (changeable through `kbled` or the source code) so the max delay between hitting the caps lock key and the color changing should be 100 ms plus whatever delay is present due to the `IT829x` controller.
 
@@ -48,7 +48,6 @@ Usage: kbledclient [parameters...]
  --speed                      Change update speed (0-2147483647 ms) default= 100 ms
  --dump                       Show contents of shared memory
  --dump+                      Show contents of shared memory with each key's state
- 
  --help                       Display this message
  Where <Red> <Grn> <Blu> are 0-255
 ```
@@ -77,10 +76,10 @@ Semaphore value: 0
 ```
 
 ## Compiling and Installing
-1. Install dependencies for `hidapi-libusb` (used to communicate to the USB HID interface) and `libevdev` (used to capture caps lock/num lock/scroll lock states).  See the 'More Details' section for further instructions if you want to use `libX11` or `libxkbfile` instead of the default `libevdev` for capturing caps lock/num lock/scroll lock events.  You probably already have gcc, make and git, but if not you will also need to install `build-essential` and `git-all`.
+1. Install dependencies for `hidapi-libusb` (used to communicate to the USB HID interface), `libsystemd-dev` (used to talk to systemd) and `libevdev` (used to capture caps lock/num lock/scroll lock states).  See the 'More Details' section for further instructions if you want to use `libX11` or `libxkbfile` instead of the default `libevdev` for capturing caps lock/num lock/scroll lock events.  You probably already have gcc, make and git, but if not you will also need to install `build-essential` and `git-all`.
   ```bash
 sudo apt update
-sudo apt install libhidapi-dev libevdev-dev build-essential git-all
+sudo apt install libhidapi-dev libsystemd-dev libevdev-dev build-essential git-all
 ```
 2. Get the repository from git.  `cd` to wherever you want the code to be in your home directory and run this to pull the archive from github:
 ```bash
@@ -96,9 +95,9 @@ make
 sudo make install
 sudo kbled &
 ```
-Optionally you can install it manually if you would prefer.  Just copy `kbled` and `kbledclient` to `/usr/bin` and copy `kbled.conf` to `/etc/init`.
+Optionally you can install it manually if you would prefer.  Just copy `kbled` and `kbledclient` to `/usr/bin` and copy `kbled.conf` to `/etc/systemd/system`.
 ### Uninstalling
-To uninstall, you can run `sudo make uninstall` from the project directory and all of the installed files will be removed.  Alternately you can manually remove  `/usr/bin/kbled`, `/usr/bin/kbledclient`, `/usr/bin/semsnoop` and  `/etc/init/kbled.conf`.
+To uninstall, you can run `sudo make uninstall` from the project directory and all of the installed files will be removed.  Alternately you can manually remove  `/usr/bin/kbled`, `/usr/bin/kbledclient`, `/usr/bin/semsnoop` and  `/etc/systemd/system/kbled.conf`.
 
 ## Hotkeys
 The originally mapped hotkeys will cause issues with this software (segfaults sometimes) since they access the USB device.  I still haven't figured out how that side of things works to intercept the signals (see the Background section for more information/research).  To get around this, you can remove the mapping of those keys in the EC controller by using System76's `system76-keyboard-configurator` and map your own hotkeys in your desktop environment.  I will provide the steps I used here for PopOS! 22.04 LTS.

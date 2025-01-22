@@ -30,7 +30,7 @@ OBJ2 = $(SRC2:.c=.o)
 OBJ3 = $(SRC3:.c=.o)
 
 # Libraries to link
-LIBS1 = -lhidapi-libusb $(XTRALIBS)
+LIBS1 = -lhidapi-libusb -lsystemd $(XTRALIBS)
 LIBS2 = 
 LIBS3 = 
 

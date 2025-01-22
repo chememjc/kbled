@@ -15,8 +15,14 @@
 #include <unistd.h>  //for sleep function, open(), close() etc...
 #include <signal.h>  //for handling signals sent
 #include <ucontext.h> //for handling sigsev, really not that useful.  If it causes trouble, delete the code in sighandle() -> case: SIGSEV and you can remove this dependency
+#include <systemd/sd-daemon.h>  //for talking to systemd
 
 #define UPDATE 100*1000 //sleep time in usec between polling
+#define DEFAULTBKLT {0,0,0} //default backlight RGB value
+#define DEFAULTFOCUS {0,127,0} //default focus RGB value
+#define DEFAULTBRIGHT MAXBRIGHT //default brightness value
+#define DEFAULTSPEED 0 //default speed
+#define DEFAULTEFFECT -1 //default keyboard effect, -1=no effect (normal operation)
 
 void sighandle(int sig, siginfo_t *info, void *context) {
     // Print the signal name based on the signal number
@@ -65,15 +71,17 @@ void sighandle(int sig, siginfo_t *info, void *context) {
             printf("Received unknown signal: %d\n", sig);
             break;
     }
+    sd_notify(0, "STATUS=kbled is shutting down...");
     //release the shared memory, close the semaphore and remove the shared memory ftok token
     sharedmem_close();
-    exit(0);  // Exit the program after handling the signal
+    sd_notify(0, "STATUS=kbled is stopped");
+    exit(0);  // Exit the program since everything should be cleaned up
 }
 
 int main(int argc, char **argv){
     if(!(argc==7 || argc==1)) {
         printf("Syntax: %s baselineR baselineG baselineB focusR focusG focusB\notherwise defaults are used without arguments\n",argv[0]);
-        return 0;
+        return 0; //let systemd know that there was a problem
     }
     // Setup signal handler:
     struct sigaction sa;
@@ -91,15 +99,18 @@ int main(int argc, char **argv){
         if (sigaction(signals[i], &sa, NULL) == -1) {
             perror("sigaction");
             printf("signals[%li]=%i\n",i,signals[i]);
-            return 1;  // Exit with error if sigaction fails
+            return 1;  //let systemd know that there was a problem
         }
     }
     
     //Start main code:
+    if (sd_notify(0, "STATUS=kbled is starting...") < 0) {
+        printf("Systemd notifications not supported; running standalone. (i.e not started by systemd)\n");
+    }
     uint8_t state=0xFF; //set to a value that wouldn't ever appear so it forces an uppdate when the kbstat() function is first run
-    uint8_t newstate=0;
-    uint8_t backlight[3]={0,0,0}; //default to all off unless otherwise specified
-    uint8_t focus[3]={64,0,0};  //default to 1/4 intensity red
+    uint8_t newstate=0; 
+    uint8_t backlight[3]=DEFAULTBKLT; //set to default value for backlight color in case it isn't set on the command line
+    uint8_t focus[3]=DEFAULTFOCUS;  //set to default value for focus color in case it isn't set on the command line
     if(argc==7)for(int i=0;i<3;i++) {
         backlight[i]=atoi(argv[1+i]);  //set default backlight color from command line
         focus[i]=atoi(argv[4+i]);  //set default focus color from command line
@@ -108,19 +119,29 @@ int main(int argc, char **argv){
     
     //initialize the keyboard:
     printf("Setup keyboard USB interface...\n");
-    if(it829x_init()==-1 || it829x_brightspeed(MAXBRIGHT, MAXSPEED)==-1 || it829x_setleds(allkeys, NKEYS, backlight)==-1) return -1; //open connection to USB, set brightness/speed, initialize all keys to backlight; quit if there is a problem
+    if(it829x_init()==-1 || it829x_brightspeed(MAXBRIGHT, MAXSPEED)==-1 || it829x_setleds(allkeys, NKEYS, backlight)==-1){ //open connection to USB, set brightness/speed, initialize all keys to backlight; quit if there is a problem
+        it829x_close(); //try to close in case it was opened successfully, no need for semaphore and shared memory 
+        sd_notify(0, "STATUS=kbled could not connect to IT829x device over usb... Exiting.  Check permissions and presence of IT829x with lsusb.  Make sure you are running this process as root");
+        printf("could not connect to IT829x device over usb... Exiting.\nCheck permissions and presence of IT829x (ID=048d:8910) with lsusb\nMake sure you are running this process as root or with sudo\n");
+        return 1; //let systemd know that there was a problem
+    }
     it829x_close();
     
     //now bring up the shared memory interface to get signals from the client
     printf("Setup shared memory...\n");
-    sharedmem_init();
+    if(sharedmem_init()!=0){
+        sd_notify(0, "STATUS=kbled could not allocate shared memory, check permissions.  Exiting...");
+        printf("Could not allocate shared memory, check permissions.  Exiting...\n");
+        sharedmem_close(); //try to clean up shared memory and semaphore in case some of it succeeded
+        return 1; //let systemd know that there was a problem
+    }
     sharedmem_lock(); //lock the structure from other processes
     shm_ptr->status=0;
-    shm_ptr->brightness=MAXBRIGHT;
+    shm_ptr->brightness=DEFAULTBRIGHT;
     shm_ptr->brightnessinc=0;
-    shm_ptr->speed=0;
+    shm_ptr->speed=DEFAULTSPEED;
     shm_ptr->speedinc=0;
-    shm_ptr->effect=-1;
+    shm_ptr->effect=DEFAULTEFFECT;
     shm_ptr->effectinc=0;
     shm_ptr->backlight[0]=backlight[0];
     shm_ptr->backlight[1]=backlight[1];
@@ -135,6 +156,8 @@ int main(int argc, char **argv){
     sharedmem_unlock();
     
     //keyboard at initial state, now wait for an event and update
+    sd_notify(0, "READY=1"); //tell systemd that we're running
+    sd_notify(0, "STATUS=kbled is running");
     while(state!=FAULT){
     usleep(UPDATE); //polling time
     newstate=kbstat();
@@ -148,7 +171,7 @@ int main(int argc, char **argv){
 	        it829x_close();
 	        //update the key state array:
 	        sharedmem_lock();
-            for(int i=0;i<3;i++){
+            for(int i=0;i<3;i++){ //update the state in shared memory
                 shm_ptr->key[findkey(K_CAPSL   )][i]=(state & CAPLOC)? shm_ptr->focus[i]:shm_ptr->backlight[i];
                 shm_ptr->key[findkey(K_CAPSR   )][i]=(state & CAPLOC)? shm_ptr->focus[i]:shm_ptr->backlight[i];
                 shm_ptr->key[findkey(K_NUM_LOCK)][i]=(state & NUMLOC)? shm_ptr->focus[i]:shm_ptr->backlight[i];
@@ -157,8 +180,8 @@ int main(int argc, char **argv){
             sharedmem_unlock(); 
 	    }
 	    if(shm_ptr->status!=0){
-	        printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i\n", shm_ptr->status,
-                shm_ptr->status & 1,(shm_ptr->status>>1) & 1,(shm_ptr->status>>2) & 1,(shm_ptr->status>>3) & 1,(shm_ptr->status>>4) & 1,(shm_ptr->status>>5) & 1,(shm_ptr->status>>6) & 1,(shm_ptr->status>>7) & 1,(shm_ptr->status>>8) & 1);
+	        //printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i\n", shm_ptr->status, //debug to verify flags are set properly
+            //    shm_ptr->status & 1,(shm_ptr->status>>1) & 1,(shm_ptr->status>>2) & 1,(shm_ptr->status>>3) & 1,(shm_ptr->status>>4) & 1,(shm_ptr->status>>5) & 1,(shm_ptr->status>>6) & 1,(shm_ptr->status>>7) & 1,(shm_ptr->status>>8) & 1);
 	        sharedmem_lock();
 	        if(shm_ptr->status & (SM_B | SM_BI | SM_S | SM_SI)){
 	            if(shm_ptr->status & SM_BI){
@@ -199,5 +222,7 @@ int main(int argc, char **argv){
 	    }
     }
     printf("Exiting... something yet to be discovered did not go as planned!\n");
-    return -1;
+    sd_notify(0, "STATUS=kbled encountered an unknown fault and is shutting down");
+    sharedmem_unlock();
+    return 1; //tells systemd that there was a fault
 }

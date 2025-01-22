@@ -22,41 +22,42 @@ struct shared_data *shm_ptr;
 FILE *file;
 sem_t *sem;
 
-void get_executable_path(char *buffer, size_t size) {
+int get_executable_path(char *buffer, size_t size) {
     ssize_t len = readlink("/proc/self/exe", buffer, size - 1);
     if (len == -1) {
         perror("readlink failed");
-        exit(EXIT_FAILURE);
+        return 1;
     }
     buffer[len] = '\0';  // Null-terminate the string
+    return 0;
 }
 
 int sharedmem_init() {
     char exe_path[256];
-    key_t shm_key;
+    key_t shm_key={0};
 
     // Create the directory for the token file if it doesn't exist
     printf("Setup token file...\n");
-    if (mkdir("/var/run", 0666) == -1 && errno != EEXIST) {
+    if(mkdir("/var/run", 0666) == -1 && errno != EEXIST) {
         perror("mkdir failed");
-        exit(EXIT_FAILURE);
+        return 1;
     }
 
-    // Get the full path of the current executable
-    get_executable_path(exe_path, sizeof(exe_path));
+    // Get the full path of the current executable, if it fails, return a failure event
+    if(get_executable_path(exe_path, sizeof(exe_path))) return 1;
 
     // Generate a unique key using ftok
     shm_key = ftok(exe_path, PROJECT_ID);
-    if (shm_key == -1) {
+    if(shm_key == -1) {
         perror("ftok failed");
-        exit(EXIT_FAILURE);
+        return 1;
     }
 
     // Write the key to the token file
     file = fopen(TOKEN_FILE, "w");
-    if (!file) {
+    if(!file) {
         perror("fopen failed");
-        exit(EXIT_FAILURE);
+        return 1;
     }
 
     fprintf(file, "%d\n", shm_key);  // Save the key as an integer
@@ -65,17 +66,17 @@ int sharedmem_init() {
     // Create the shared memory segment with 0666 permissions (readable and writable by all)
     printf("Create shared memeory segment (%li bytes)...\n",sizeof(struct shared_data));
     shm_id = shmget(shm_key, sizeof(struct shared_data), IPC_CREAT | 0666);
-    if (shm_id == -1) {
+    if(shm_id == -1) {
         perror("shmget failed");
-        exit(EXIT_FAILURE);
+        return 1;
     }
 
     // Attach to the shared memory segment
     printf("Attach to shared memory segment...\n");
     shm_ptr = shmat(shm_id, NULL, 0);
-    if (shm_ptr == (void *)-1) {
+    if(shm_ptr == (void *)-1) {
         perror("shmat failed");
-        exit(EXIT_FAILURE);
+        return 1;
     }
 
     // Create the semaphore for mutual exclusion
@@ -83,59 +84,60 @@ int sharedmem_init() {
     mode_t old_umask = umask(0000); // change umask so the semaphore file is created with correct permissions
     sem = sem_open(SEM_NAME, O_CREAT, 0666, 1);  // Initial value = 1 (mutex)
     umask(old_umask); // Restore original umask
-    if (sem == SEM_FAILED) {
+    if(sem == SEM_FAILED) {
         perror("sem_open failed");
-        exit(EXIT_FAILURE);
+        return 1;
     }
     return 0;
 }
 
 void sharedmem_lock(){
     // Wait (lock) the semaphore before accessing shared memory
-    printf("locking...\n");
     sem_wait(sem);
-    printf("semaphore locked\n");
 }
 
 void sharedmem_unlock(){
     // Signal (unlock) the semaphore after accessing shared memory
-    printf("unlocking...\n");
     sem_post(sem);
-    printf("semaphore unlocked\n");
 }
 
 int sharedmem_close() {
     //shutdown sequence
     // Detach from the shared memory segment
+    int problem=0; //count the number of problems encountered during the process
+    sharedmem_lock(); //lock the semaphore to make sure nothing else tries to attach
     printf("Detaching shared memory...\n");
-    if (shmdt(shm_ptr) == -1) {
+    if(shmdt(shm_ptr) == -1) {
         perror("shmdt failed");
-        exit(EXIT_FAILURE);
+        problem |= 1;
     }
     printf("Shared memory detached\n");
     //remove shared memory segment
-    printf("Removing shared memory segment...\n");
-    if (shmctl(shm_id, IPC_RMID, NULL) == -1) {
+    if(shmctl(shm_id, IPC_RMID, NULL) == -1) {
         perror("shmctl: error removing shared memory segment");
-        exit(1);
+        problem |= 1<<1;
     }
     printf("Shared memory segment removed\n");
 
     // Close the semaphore
-    printf("closing...\n");
-    sem_close(sem);
-    printf("semaphore closed\n");
-    sem_unlink(SEM_NAME);
+    if(sem_close(sem) == -1){
+        perror("sem_close: error closing semaphore");
+        problem |= 1<<2;
+    }
+    if(sem_unlink(SEM_NAME) == -1){
+        perror("sem_unlink: error unlinking semaphore");
+        problem |= 1<<3;
+    }
     printf("semaphore unlinked\n");
     
     // remove the key from the token file
     file = fopen(TOKEN_FILE, "w");
     if (!file) {
         perror("second fopen failed");
-        exit(EXIT_FAILURE);
+        problem |= 1<<4;
     }
 
-    fprintf(file, "0\n");  // Save the key as an integer
+    fprintf(file, "0\n");  // clear the shared memory ID
     fclose(file);
-    return 0;
+    return problem;
 }
