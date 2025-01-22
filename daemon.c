@@ -10,10 +10,11 @@
 #include "it829x.h"
 #include "kbstatus.h"
 #include "sharedmem.h"
-#include <stdlib.h>  //needed for atoi()
-#include <stdint.h>  //uint8_t etc. definitions
-#include <unistd.h>  //for sleep function, open(), close() etc...
-#include <signal.h>  //for handling signals sent
+#include <stdlib.h>   //needed for atoi()
+#include <stdint.h>   //uint8_t etc. definitions
+#include <unistd.h>   //for sleep function, open(), close() etc...
+#include <signal.h>   //for handling signals sent
+#include <time.h>     //for calculatinng the time the loop takes to execute
 #include <ucontext.h> //for handling sigsev, really not that useful.  If it causes trouble, delete the code in sighandle() -> case: SIGSEV and you can remove this dependency
 #include <systemd/sd-daemon.h>  //for talking to systemd
 
@@ -22,7 +23,7 @@
 #define DEFAULTFOCUS {0,127,0} //default focus RGB value
 #define DEFAULTBRIGHT MAXBRIGHT //default brightness value
 #define DEFAULTSPEED 0 //default speed
-#define DEFAULTEFFECT -1 //default keyboard effect, -1=no effect (normal operation)
+#define DEFAULTEFFECT SM_EFFECT_NONE //default keyboard effect, -1=no effect (normal operation)
 
 void sighandle(int sig, siginfo_t *info, void *context) {
     // Print the signal name based on the signal number
@@ -97,7 +98,7 @@ int main(int argc, char **argv){
     for (long unsigned int i = 0; i < sizeof(signals) / sizeof(signals[0]); ++i) {
         if (sigaction(signals[i], &sa, NULL) == -1) {
             perror("sigaction");
-            printf("signals[%li]=%i\n",i,signals[i]);
+            printf("problem setting sigaction() for signals[%li]=%i\n",i,signals[i]);
             return 1;  //let systemd know that there was a problem
         }
     }
@@ -106,11 +107,14 @@ int main(int argc, char **argv){
     if (sd_notify(0, "STATUS=kbled is starting...") < 0) {
         printf("Systemd notifications not supported; running standalone. (i.e not started by systemd)\n");
     }
-    uint8_t state=0xFF; //set to a value that wouldn't ever appear so it forces an uppdate when the kbstat() function is first run
+    uint8_t state=0xFF; //set to a value that wouldn't ever appear so it forces an uppdate when the kbstat() function is first run for lock keys
     uint16_t scanspeed=UPDATE; //set default scan speed/update period
-    uint8_t newstate=0; 
+    uint8_t newstate=0; //latest keyboard lock key states
+    uint8_t lockupdate=0; //flag to determine if the state of the lock keys on the keyboard were updated in the main loop
     uint8_t backlight[3]=DEFAULTBKLT; //set to default value for backlight color in case it isn't set on the command line
     uint8_t focus[3]=DEFAULTFOCUS;  //set to default value for focus color in case it isn't set on the command line
+    clock_t begintime, endtime; //variables for holding start/end times for cpu time calculation in loop
+    double cputime=-1.0; //time it took to run through the loop the last time something was updated
     if(argc==7)for(int i=0;i<3;i++) {
         backlight[i]=atoi(argv[1+i]);  //set default backlight color from command line
         focus[i]=atoi(argv[4+i]);  //set default focus color from command line
@@ -121,7 +125,7 @@ int main(int argc, char **argv){
     printf("Setup keyboard USB interface...\n");
     if(it829x_init()==-1 || it829x_brightspeed(MAXBRIGHT, MAXSPEED)==-1 || it829x_setleds(allkeys, NKEYS, backlight)==-1){ //open connection to USB, set brightness/speed, initialize all keys to backlight; quit if there is a problem
         it829x_close(); //try to close in case it was opened successfully, no need for semaphore and shared memory 
-        sd_notify(0, "STATUS=kbled could not connect to IT829x device over usb... Exiting.  Check permissions and presence of IT829x with lsusb.  Make sure you are running this process as root");
+        sd_notify(0, "STATUS=kbled could not connect to IT829x device over usb... Exiting.  Check permissions and presence of IT829x with lsusb");
         printf("could not connect to IT829x device over usb... Exiting.\nCheck permissions and presence of IT829x (ID=048d:8910) with lsusb\nMake sure you are running this process as root or with sudo\n");
         return 1; //let systemd know that there was a problem
     }
@@ -138,6 +142,7 @@ int main(int argc, char **argv){
     sharedmem_lock(); //lock the structure from other processes
     shm_ptr->status=0;
     shm_ptr->scanspeed=UPDATE;
+    shm_ptr->lastcputime=cputime;
     shm_ptr->brightness=DEFAULTBRIGHT;
     shm_ptr->brightnessinc=0;
     shm_ptr->speed=DEFAULTSPEED;
@@ -159,10 +164,11 @@ int main(int argc, char **argv){
     //keyboard at initial state, now wait for an event and update
     sd_notify(0, "READY=1"); //tell systemd that we're running
     sd_notify(0, "STATUS=kbled is running");
-    while(state!=FAULT){
+    while(1){
         usleep((uint32_t)scanspeed * 1000); //polling time
+        begintime = clock(); //set the start time for measuring time spent for keyboard LED update
         newstate=kbstat();
-        if(state!=newstate){
+        if(state!=newstate && state != FAULT && shm_ptr->effect==SM_EFFECT_NONE){ //if the keyboard state changed, read successfully and the keyboard isn't in an effect mode then update the caps/scroll/num lock LEDs
 	        state=newstate;
 	        it829x_init();
 	        it829x_setled(K_CAPSL,    (state & CAPLOC)? shm_ptr->focus:shm_ptr->backlight);
@@ -178,7 +184,9 @@ int main(int argc, char **argv){
                 shm_ptr->key[findkey(K_NUM_LOCK)][i]=(state & NUMLOC)? shm_ptr->focus[i]:shm_ptr->backlight[i];
                 shm_ptr->key[findkey(K_INSERT  )][i]=(state & SCRLOC)? shm_ptr->focus[i]:shm_ptr->backlight[i];
             }
+            shm_ptr->lastcputime=cputime; //update cpu end time, this will be overwritten if something else happened in the same cycle
             sharedmem_unlock(); 
+            lockupdate=1;
 	    }
 	    if(shm_ptr->status!=0){
 	        //printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i\n", shm_ptr->status, //debug to verify flags are set properly
@@ -225,10 +233,16 @@ int main(int argc, char **argv){
 	        }
 	        
 	        shm_ptr->status=0;
+	        shm_ptr->lastcputime=cputime; //update cpu end time
 	        sharedmem_unlock();
 	    }
+	    endtime = clock(); //set the end time for measureing time spend for keyboard LED update
+	    if(state==0xFF || lockupdate!=0) {
+	        cputime = ((double) (endtime - begintime)) / CLOCKS_PER_SEC; //if the keyboard LEDs were updated, update the last loop time
+	        lockupdate=0; //reset lockupdate flag back to zero
+	    }
     }
-    printf("Exiting... something yet to be discovered did not go as planned!\n");
+    printf("Exiting... something yet to be discovered did not go as planned and broke out of the while(1) loop!\n");
     sd_notify(0, "STATUS=kbled encountered an unknown fault and is shutting down");
     sharedmem_unlock();
     return 1; //tells systemd that there was a fault

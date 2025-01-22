@@ -37,6 +37,7 @@ void print_usage(char *program_name) {
     fprintf(stderr, " -k <LED#> <Red> <Grn> <Blu>  Set individual LED (0-%i) color\n", NKEYS-1);
     fprintf(stderr, " -kb <LED#>                   Set individual LED (0-%i) to backlight color\n", NKEYS-1);
     fprintf(stderr, " -kf <LED#>                   Set individual LED (0-%i) to focus color\n", NKEYS-1);
+    fprintf(stderr, " -cpu                         Display the time it took kbled daemon to execute the last update\n");
     fprintf(stderr, " --scan                       Change update speed (1 to 65535 ms) default= 100 ms\n");
     fprintf(stderr, " --dump                       Show contents of shared memory\n");
     fprintf(stderr, " --dump+                      Show contents of shared memory with each key's state\n");
@@ -119,6 +120,7 @@ int main(int argc, char *argv[]) {
     memset(&new_ptr, 0, sizeof(struct shared_data));
     char verbose = 0; // Flag for verbose output
     char memdump = 0; // Flag for dumping shared memory
+    char cputime = 0; // Flag for reporting time spent in last kbled keyboard update event
     int i = 1;
     while (i < argc) {
         if (strcmp(argv[i], "-v") == 0) {
@@ -284,6 +286,12 @@ int main(int argc, char *argv[]) {
                 return 1;
             }
         }
+        else if (strcmp(argv[i], "-cpu") == 0) {
+            // Cycle through preset backlight/focus colors
+            if(verbose)printf("Report time spent by kbled daemon durinng the last keyboard update event\n");
+            cputime=1; //report time spent the last time kbled daemon performed keyboard update event
+            i++;
+        }
         else if (strcmp(argv[i], "--scan") == 0) {
             // set new scan speed for kbled daemon
             if (i + 1 < argc && atoi(argv[i + 1]) >= 1 && atoi(argv[i + 1]) <= 65535) {
@@ -387,6 +395,7 @@ int main(int argc, char *argv[]) {
     if(new_ptr.status & SM_KEY) for(i=0; i<4; i++) for(int j=0; j<NKEYS; j++) if(new_ptr.key[3]!=0)shm_ptr->key[j][i]=new_ptr.key[j][i];
     if(new_ptr.status & SM_SSPD)   shm_ptr->scanspeed=new_ptr.scanspeed;
     if(memdump) printstructure(shm_ptr,memdump);
+    if(cputime) printf("Last kbled daemon LED update time: %f milliseconds\n", shm_ptr->lastcputime*1000.0);
     printf("Unlocking...\n");
     sem_post(sem); //unlock semaphore
     printf("Unlocked\n");

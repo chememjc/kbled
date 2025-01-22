@@ -99,7 +99,7 @@ make
 ./kbled 255 0 0  0 255 255
 ```
 5. Install the app:
-```bash
+```text
 sudo make install
 sudo systemctl enable kbled
 sudo systemctl start kbled
