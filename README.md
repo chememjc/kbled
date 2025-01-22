@@ -19,9 +19,17 @@ Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
 ```
 
 ### `kbled` daemon:
-This program is designed to be launched during system startup by systemd with the included script, though it can be run manually to verify it works before installation.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock will change to when active) by specifying them from the command line. Example: `sudo kbled 255 0 0 0 255 0 0` to set the backlight color to red and the focus color to green.  The default if nothing specified is a red backlight and a green focus color.  
+This program is designed to be launched during system startup by systemd with the included script, though it can be run manually to verify it works before installation.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock keys will be when active) by specifying them sequentially from the command line.  The default if nothing specified on the command line is a blank (o,0,0) backlight and a and a green focus color. 
+Syntax: 
+```
+kbled backlightR backlightG backlightB focusR focusG focusB
+```
+Example: sets the backlight color to 1/4 brightness green and the focus color to red.
+```
+sudo kbled 0 63 0 255 0 0
+``` 
 
-It sets up a shared memory space that `kbledclient` (called from an unprivileged account) can interact with to modify the keyboard led settings along with a semaphore for accessing the array.  The default scan time is 100 ms (changeable through `kbled` or the source code) so the max delay between hitting the caps lock key and the color changing should be 100 ms plus whatever delay is present due to the `IT829x` controller.
+It sets up a shared memory space that `kbledclient` (called from an unprivileged account) can interact with to modify the keyboard led settings along with a semaphore for accessing the array.  The default scan time is 100 ms (changeable through `kbledclient` or the `kbled` source code) so the max delay between hitting the caps lock key and the color changing should be 100 ms plus whatever delay is present due to the `IT829x` controller.
 
 ### `kbledclient` user space client:
 This program interacts with the running `kbled` daemon to modify the LED configuration of the keyboard.  The LEDs can be changed all together by changing the backlight and focus colors or on a per-key basis.  Here are the command line parameters:
@@ -31,13 +39,13 @@ Usage: kbledclient [parameters...]
  -v                           Verbose output
  -b+                          Increase brightness
  -b-                          Decrease brightness
- -b <0-10>                    Set brightness
+ -b <0-10>                    Set brightness (default=10)
  -s+                          Increase pattern speed
  -s-                          Decrease pattern speed
- -s <0-2>                     Set pattern speed
+ -s <0-2>                     Set pattern speed (default=0)
  -p+                          Increment pattern
  -p-                          Decrement pattern
- -p <-1 to 6>                 Set pattern, (-1=no pattern)
+ -p <-1 to 6>                 Set pattern, (default=-1 [no pattern])
  -bl <Red> <Grn> <Blu>        Set backlight color
  -fo <Red> <Grn> <Blu>        Set focus color (caps/num/scroll locks)
  -c                           Cycle through preset backlight/focus colors
@@ -45,7 +53,7 @@ Usage: kbledclient [parameters...]
  -kb <LED#>                   Set individual LED (0-114) to backlight color
  -kf <LED#>                   Set individual LED (0-114) to focus color
  -t                           Toggle LEDs on/off
- --speed                      Change update speed (0-2147483647 ms) default= 100 ms
+ --speed                      Change update speed (1-65535 ms) default= 100 ms
  --dump                       Show contents of shared memory
  --dump+                      Show contents of shared memory with each key's state
  --help                       Display this message

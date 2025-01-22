@@ -17,7 +17,7 @@
 #include <ucontext.h> //for handling sigsev, really not that useful.  If it causes trouble, delete the code in sighandle() -> case: SIGSEV and you can remove this dependency
 #include <systemd/sd-daemon.h>  //for talking to systemd
 
-#define UPDATE 100*1000 //sleep time in usec between polling
+#define UPDATE 100 //sleep time in usec between polling
 #define DEFAULTBKLT {0,0,0} //default backlight RGB value
 #define DEFAULTFOCUS {0,127,0} //default focus RGB value
 #define DEFAULTBRIGHT MAXBRIGHT //default brightness value
@@ -85,7 +85,6 @@ int main(int argc, char **argv){
     }
     // Setup signal handler:
     struct sigaction sa;
-    // Set up the signal handler
     sa.sa_sigaction = sighandle;  // Use the extended handler
     sa.sa_flags = SA_SIGINFO;     // Enable extended signal handling
     sigemptyset(&sa.sa_mask);     // Don't block any signals
@@ -108,6 +107,7 @@ int main(int argc, char **argv){
         printf("Systemd notifications not supported; running standalone. (i.e not started by systemd)\n");
     }
     uint8_t state=0xFF; //set to a value that wouldn't ever appear so it forces an uppdate when the kbstat() function is first run
+    uint16_t scanspeed=UPDATE; //set default scan speed/update period
     uint8_t newstate=0; 
     uint8_t backlight[3]=DEFAULTBKLT; //set to default value for backlight color in case it isn't set on the command line
     uint8_t focus[3]=DEFAULTFOCUS;  //set to default value for focus color in case it isn't set on the command line
@@ -137,6 +137,7 @@ int main(int argc, char **argv){
     }
     sharedmem_lock(); //lock the structure from other processes
     shm_ptr->status=0;
+    shm_ptr->scanspeed=UPDATE;
     shm_ptr->brightness=DEFAULTBRIGHT;
     shm_ptr->brightnessinc=0;
     shm_ptr->speed=DEFAULTSPEED;
@@ -159,8 +160,8 @@ int main(int argc, char **argv){
     sd_notify(0, "READY=1"); //tell systemd that we're running
     sd_notify(0, "STATUS=kbled is running");
     while(state!=FAULT){
-    usleep(UPDATE); //polling time
-    newstate=kbstat();
+        usleep((uint32_t)scanspeed * 1000); //polling time
+        newstate=kbstat();
         if(state!=newstate){
 	        state=newstate;
 	        it829x_init();
@@ -183,12 +184,18 @@ int main(int argc, char **argv){
 	        //printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i\n", shm_ptr->status, //debug to verify flags are set properly
             //    shm_ptr->status & 1,(shm_ptr->status>>1) & 1,(shm_ptr->status>>2) & 1,(shm_ptr->status>>3) & 1,(shm_ptr->status>>4) & 1,(shm_ptr->status>>5) & 1,(shm_ptr->status>>6) & 1,(shm_ptr->status>>7) & 1,(shm_ptr->status>>8) & 1);
 	        sharedmem_lock();
+	        if(shm_ptr->status & SM_SSPD){ //scan speed update
+	            if(shm_ptr->scanspeed>1){
+	                printf("Update scan speed changed from %u ms -> %u ms\n",scanspeed,shm_ptr->scanspeed);
+	                scanspeed=shm_ptr->scanspeed;
+	            }
+	            else printf("Scan speed out of range (1-65535 ms): %u ms\n",shm_ptr->scanspeed);
+	        }
 	        if(shm_ptr->status & (SM_B | SM_BI | SM_S | SM_SI)){
 	            if(shm_ptr->status & SM_BI){
 	                printf("Inc/dec brightness: %i -> ",shm_ptr->brightness);
 	                if(shm_ptr->brightness==MINBRIGHT && shm_ptr->brightnessinc==-1) shm_ptr->brightness=MINBRIGHT;
 	                else shm_ptr->brightness += shm_ptr->brightnessinc;
-	                printf(" %i\n",shm_ptr->brightness);
 	            }
 	            if(shm_ptr->status & SM_SI){
 	                printf("Inc/dec speed: %i -> ",shm_ptr->speed);

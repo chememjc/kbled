@@ -24,21 +24,23 @@ void print_usage(char *program_name) {
     fprintf(stderr, " -v                           Verbose output\n");
     fprintf(stderr, " -b+                          Increase brightness\n");
     fprintf(stderr, " -b-                          Decrease brightness\n");
-    fprintf(stderr, " -b <0-10>                    Set brightness\n");
+    fprintf(stderr, " -b <0-10>                    Set brightness (default=10)\n");
     fprintf(stderr, " -s+                          Increase pattern speed\n");
     fprintf(stderr, " -s-                          Decrease pattern speed\n");
-    fprintf(stderr, " -s <0-2>                     Set pattern speed\n");
+    fprintf(stderr, " -s <0-2>                     Set pattern speed (default=0)\n");
     fprintf(stderr, " -p+                          Increment pattern\n");
     fprintf(stderr, " -p-                          Decrement pattern\n");
-    fprintf(stderr, " -p <-1 to 6>                 Set pattern, (-1=no pattern)\n");
+    fprintf(stderr, " -p <-1 to 6>                 Set pattern, (default=-1 [no pattern])\n");
     fprintf(stderr, " -bl <Red> <Grn> <Blu>        Set backlight color\n");
     fprintf(stderr, " -fo <Red> <Grn> <Blu>        Set focus color (caps/num/scroll locks)\n");
     fprintf(stderr, " -c                           Cycle through preset backlight/focus colors\n");
     fprintf(stderr, " -k <LED#> <Red> <Grn> <Blu>  Set individual LED (0-%i) color\n", NKEYS-1);
     fprintf(stderr, " -kb <LED#>                   Set individual LED (0-%i) to backlight color\n", NKEYS-1);
     fprintf(stderr, " -kf <LED#>                   Set individual LED (0-%i) to focus color\n", NKEYS-1);
+    fprintf(stderr, " --scan                       Change update speed (1 to 65535 ms) default= 100 ms\n");
     fprintf(stderr, " --dump                       Show contents of shared memory\n");
     fprintf(stderr, " --dump+                      Show contents of shared memory with each key's state\n");
+    fprintf(stderr, " --help                       Display this message\n");
     fprintf(stderr, " Where <Red> <Grn> <Blu> are 0-255\n");
 }
 
@@ -270,7 +272,7 @@ int main(int argc, char *argv[]) {
             }
         }
         else if (strcmp(argv[i], "-kf") == 0) {
-            // Set key to background color
+            // Set key to focus color
             if (i + 1 < argc && atoi(argv[i + 1]) >= 0 && atoi(argv[i + 1]) <= NKEYS-1) {
                 unsigned char led = atoi(argv[i + 1]);
                 if(verbose)printf("Set LED %i to backlight color\n", led);
@@ -279,6 +281,19 @@ int main(int argc, char *argv[]) {
                 i += 2;
             } else {
                 fprintf(stderr, "Error: -kf requires a LED number between 0 and %i\n",NKEYS-1);
+                return 1;
+            }
+        }
+        else if (strcmp(argv[i], "--scan") == 0) {
+            // set new scan speed for kbled daemon
+            if (i + 1 < argc && atoi(argv[i + 1]) >= 1 && atoi(argv[i + 1]) <= 65535) {
+                uint16_t scan = atoi(argv[i + 1]);
+                if(verbose)printf("Set scan speed to %i ms\n", scan);
+                new_ptr.scanspeed=scan; //set update value to focus color
+                new_ptr.status |= SM_SSPD; //set update flag
+                i += 2;
+            } else {
+                fprintf(stderr, "Error: --scan must be between 1 and 65535 ms, you specified: %s\n",argv[i + 1]);
                 return 1;
             }
         }
@@ -293,6 +308,11 @@ int main(int argc, char *argv[]) {
             if(verbose)printf("Dump contents of shared memory with individual keys:\n");
             memdump=2;
             i++;
+        }
+        else if (strcmp(argv[i], "--help") == 0) {
+            // Increase brightness
+            print_usage(argv[0]);
+            return 1;
         }
         else {
             // Handle unknown switch
@@ -365,6 +385,7 @@ int main(int argc, char *argv[]) {
     if(new_ptr.status & SM_BL)  for(i=0; i<3; i++) shm_ptr->backlight[i]=new_ptr.backlight[i];
     if(new_ptr.status & SM_FO)  for(i=0; i<3; i++) shm_ptr->focus[i]=new_ptr.focus[i];
     if(new_ptr.status & SM_KEY) for(i=0; i<4; i++) for(int j=0; j<NKEYS; j++) if(new_ptr.key[3]!=0)shm_ptr->key[j][i]=new_ptr.key[j][i];
+    if(new_ptr.status & SM_SSPD)   shm_ptr->scanspeed=new_ptr.scanspeed;
     if(memdump) printstructure(shm_ptr,memdump);
     printf("Unlocking...\n");
     sem_post(sem); //unlock semaphore

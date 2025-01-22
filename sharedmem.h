@@ -22,6 +22,7 @@
 #define SM_BL   0x0040  //backlight color updated
 #define SM_FO   0x0080  //focus color updated
 #define SM_KEY  0x0100  //individual key color updated
+#define SM_SSPD 0x0200  //Scan speed updated
 
 #define SM_NOUPD    0   //no update
 #define SM_UPD      1   //updated
@@ -35,6 +36,7 @@
 // Both programs can read from and write to this structure
 struct shared_data {
     uint16_t status; //status flag; 0b0000000000000000 where 
+    uint16_t scanspeed; //scan speed
     unsigned char brightness; //absolute brightness 0-10
     char brightnessinc;  //brightness increment +1 or -1, 0 for unchanged
     unsigned char speed; //absolute speed set 0-2
