@@ -41,17 +41,30 @@ BIN_DIR = /usr/bin
 # Default target
 all: $(TARGET1) $(TARGET2) $(TARGET3)
 
+# Check if running as root or with sudo
+check-root:
+	@if [ $$(id -u) -ne 0 ]; then \
+		echo "You must be root to run this. Try running with sudo."; \
+		exit 1; \
+	fi
+
 # Installation target
-install: all
+install: check-root all
 	# Copy the kbled.conf script to /etc/init/
 	install -m 644 $(INITSCRIPT) $(INIT_DIR)/$(INITSCRIPT)
 	# Copy the executables to /usr/bin
 	install -m 755 $(TARGET1) $(BIN_DIR)/$(TARGET1)
 	install -m 755 $(TARGET2) $(BIN_DIR)/$(TARGET2)
 	install -m 755 $(TARGET3) $(BIN_DIR)/$(TARGET3)
+	@echo 
+	@echo To enable on startup run:  sudo systemctl enable kbled
+	@echo To start kbled now run:\ \ \ sudo systemctl start kbled
 
-uninstall: all
-	# remove the kbled.conf script from /etc/init/
+uninstall: check-root all
+	#stop the service if it is running and disable it
+	@systemctl is-active --quiet kbled && systemctl stop kbled || true
+	@systemctl is-enabled --quiet kbled && systemctl disable kbled || true
+	# remove the kbled.conf script from /etc/systemd/system
 	rm -f $(INIT_DIR)/$(INITSCRIPT)
 	# remove the executables from /usr/bin
 	rm -f $(BIN_DIR)/$(TARGET1)
@@ -78,4 +91,4 @@ $(TARGET3): $(OBJ3)
 clean:
 	rm -f $(TARGET1) $(TARGET2) $(TARGET3) *.o
 
-.PHONY: all clean
+.PHONY: all clean install uninstall

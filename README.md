@@ -101,11 +101,12 @@ make
 5. Install the app:
 ```bash
 sudo make install
-sudo kbled &
+sudo systemctl enable kbled
+sudo systemctl start kbled
 ```
-Optionally you can install it manually if you would prefer.  Just copy `kbled` and `kbledclient` to `/usr/bin` and copy `kbled.conf` to `/etc/systemd/system`.
+Optionally you can install it manually if you would prefer.  Just copy `kbled` and `kbledclient` to `/usr/bin` and copy `kbled.conf` to `/etc/systemd/system` and execute `sudo systemctl enable kbled` to enable the daemon on system startup and `sudo systemctl start kbled` to start the daemon now.
 ### Uninstalling
-To uninstall, you can run `sudo make uninstall` from the project directory and all of the installed files will be removed.  Alternately you can manually remove  `/usr/bin/kbled`, `/usr/bin/kbledclient`, `/usr/bin/semsnoop` and  `/etc/systemd/system/kbled.conf`.
+To uninstall, you can run `sudo make uninstall` from the project directory and all of the installed files will be removed.  Alternately you can manually remove it by stopping and disabling the service with `sudo systemctl stop kbled` followed by `sudo systemctl disable kbled`.  You can then remove the installed files with `sudo rm /usr/bin/kbled`, `sudo rm /usr/bin/kbledclient`, `sudo rm /usr/bin/semsnoop` and  `sudo rm /etc/systemd/system/kbled.conf`.
 
 ## Hotkeys
 The originally mapped hotkeys will cause issues with this software (segfaults sometimes) since they access the USB device.  I still haven't figured out how that side of things works to intercept the signals (see the Background section for more information/research).  To get around this, you can remove the mapping of those keys in the EC controller by using System76's `system76-keyboard-configurator` and map your own hotkeys in your desktop environment.  I will provide the steps I used here for PopOS! 22.04 LTS.
