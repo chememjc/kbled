@@ -2,9 +2,9 @@
 ## Keyboard LED update program for ITE IT-829x based keyboard controllers
 I really like my System76 Bonobo WS (bonw15) laptop but have always found it extremely annoying when I accidentally hit the `Caps Lock` key and wouldn't know until I started typing since there is no visual indication.  The keyboard illumination controls from System76 allow you to turn the backlight on/off, the brightness up/down and cycle the colors through a predefined pallete.  If you dig further into `/sys/class/leds/system76_acpi\:\:kbd_backlight/` you can change the RGB color and brightness but there is still no mechanism to control individual LEDS.  
 
-This still didn't solve my problem, so I set out to find a way to bypass the System76 driver and write my own.  I stumbled across a similar project where [matheusmoreira](https://github.com/matheusmoreira/ite-829x) decoded the signals between Clevo's windows based keyboard control software and the IT829x controller on his Clevo PA70ES (same chipset) to individually change keyboard LED states.  Using this, I was able to prove that it worked on my laptop as well, though its functionality was fairly limited.  I decided to use the decoded commands he found to write a lightweight daemon that could be loaded at boot time to handle the keyboard backlight and change the caps lock, scroll lock and num lock keys in addition to some other features I thought would be neat to have.
+Since this still didn't solve my problem, so I set out to find a way to bypass the System76 driver and write my own.  I stumbled across a similar project where [matheusmoreira](https://github.com/matheusmoreira/ite-829x) decoded the signals between Clevo's windows based keyboard control software and the IT829x controller on his Clevo PA70ES (same chipset) to individually change keyboard LED states.  Using this, I was able to prove that it worked on my laptop as well, though its functionality was fairly limited.  I decided to use the decoded commands he found to write a lightweight daemon that could be loaded at boot time to handle the keyboard backlight and change the caps lock, scroll lock and num lock keys in addition to some other features I thought would be neat to have.
 
-The end result is this project that consists of two main programs, `kbled` and `kbledclient` along with a tool I called `semsnoop` that checks the state of semaphores on the system.  
+The end result is this project that consists of two main programs, `kbled` and `kbledclient` along with a tool I called `semsnoop` that checks the state of semaphores to aid in debugging the two main programs.  
 
 ## Compatibility
 This software should work with any linux system with a ITE IT-829x USB keyboard controller.  If you are unsure, just look for device ID `048d:8910` with lsusb.  If it shows up on the list, then there is a good chance this software will work.  I have tested this with a System76 Bonobo WS (bonw15) laptop.  It is manufactured by Clevo as an X370SNW.  Here is how the device appears when I run `lsusb`:
@@ -19,7 +19,7 @@ Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
 ```
 
 ### `kbled` daemon:
-This program is designed to be launched during system startup by systemd with the included script, though it can be run manually to verify it works before installation.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock keys will be when active) by specifying them sequentially from the command line.  The default if nothing specified on the command line is a blank (o,0,0) backlight and a and a green focus color. 
+This program is designed to be launched during system startup by systemd with the included script, though it can be run manually to verify it works before installation.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock keys will be when active) by specifying them sequentially from the command line.  The default if nothing specified on the command line is a blank (0,0,0) backlight and a and a green focus color. 
 Syntax: 
 ```
 kbled backlightR backlightG backlightB focusR focusG focusB
@@ -104,7 +104,9 @@ sudo make install
 sudo systemctl enable kbled
 sudo systemctl start kbled
 ```
-Optionally you can install it manually if you would prefer.  Just copy `kbled` and `kbledclient` to `/usr/bin` and copy `kbled.conf` to `/etc/systemd/system` and execute `sudo systemctl enable kbled` to enable the daemon on system startup and `sudo systemctl start kbled` to start the daemon now.
+You can also check the current status of the `kbled` daemon by running `systemctl status kbled` as a normal user.
+
+Optionally you can install it manually if you would prefer.  Just copy `kbled` and `kbledclient` to `/usr/bin` and copy `kbled.conf` to `/etc/systemd/system/` and execute `sudo systemctl enable kbled` to enable the daemon on system startup and `sudo systemctl start kbled` to start the daemon now.
 ### Uninstalling
 To uninstall, you can run `sudo make uninstall` from the project directory and all of the installed files will be removed.  Alternately you can manually remove it by stopping and disabling the service with `sudo systemctl stop kbled` followed by `sudo systemctl disable kbled`.  You can then remove the installed files with `sudo rm /usr/bin/kbled`, `sudo rm /usr/bin/kbledclient`, `sudo rm /usr/bin/semsnoop` and  `sudo rm /etc/systemd/system/kbled.conf`.
 
@@ -162,7 +164,7 @@ After doing some digging into System76's [EC firmware](https://github.com/system
 A few libraries are required to compile this software.  Below is a description of each and how to install them.
 
 #### `libhidapi-dev`:
-[Library](https://github.com/libusb/hidapi) to talk to USB HID devices including the IT829X keyboard controller.  Include directive `#include <hidapi/hidapi.h>` in a c file.  Use `-lhidapi-libusb` when calling gcc to link the library.
+[Library](https://github.com/libusb/hidapi) to talk to USB HID devices.  This is how changes are sent to the IT829X keyboard controller.  Include directive `#include <hidapi/hidapi.h>` in a c file.  Use `-lhidapi-libusb` when calling gcc to link the library.
 
 #### `libx11-dev`:
 [Library](https://gitlab.freedesktop.org/xorg/lib/libx11) for interacting with the core X11 sybsystem.  This is needed to check and see if the caps lock, scroll lock and num lock keys are toggled.  Include directive `#include <X11/Xlib.h>` and `#include <X11/XKBlib.h>` in the c file.  Use `-lX11` when calling gcc to link the libraries.  This can be substitued for evdev and libudev with some extra steps.  Define `X11` in the `Makefile` to choose this option.

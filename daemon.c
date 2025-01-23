@@ -115,7 +115,9 @@ int main(int argc, char **argv){
     uint8_t focus[3]=DEFAULTFOCUS;  //set to default value for focus color in case it isn't set on the command line
     clock_t begintime, endtime; //variables for holding start/end times for cpu time calculation in loop
     double cputime=-1.0; //time it took to run through the loop the last time something was updated
-    if(argc==7)for(int i=0;i<3;i++) {
+    int i,j; //general purpose incrementing variables
+    
+    if(argc==7)for(i=0;i<3;i++) {
         backlight[i]=atoi(argv[1+i]);  //set default backlight color from command line
         focus[i]=atoi(argv[4+i]);  //set default focus color from command line
     }
@@ -123,7 +125,7 @@ int main(int argc, char **argv){
     
     //initialize the keyboard:
     printf("Setup keyboard USB interface...\n");
-    if(it829x_init()==-1 || it829x_brightspeed(MAXBRIGHT, MAXSPEED)==-1 || it829x_setleds(allkeys, NKEYS, backlight)==-1){ //open connection to USB, set brightness/speed, initialize all keys to backlight; quit if there is a problem
+    if(it829x_init()==-1 || it829x_reset()==-1 || it829x_brightspeed(MAXBRIGHT, MAXSPEED)==-1 || it829x_setleds(allkeys, NKEYS, backlight)==-1){ //open connection to USB, set brightness/speed, initialize all keys to backlight; quit if there is a problem
         it829x_close(); //try to close in case it was opened successfully, no need for semaphore and shared memory 
         sd_notify(0, "STATUS=kbled could not connect to IT829x device over usb... Exiting.  Check permissions and presence of IT829x with lsusb");
         printf("could not connect to IT829x device over usb... Exiting.\nCheck permissions and presence of IT829x (ID=048d:8910) with lsusb\nMake sure you are running this process as root or with sudo\n");
@@ -149,13 +151,14 @@ int main(int argc, char **argv){
     shm_ptr->speedinc=0;
     shm_ptr->effect=DEFAULTEFFECT;
     shm_ptr->effectinc=0;
+    shm_ptr->colorindex=0;
     shm_ptr->backlight[0]=backlight[0];
     shm_ptr->backlight[1]=backlight[1];
     shm_ptr->backlight[2]=backlight[2];
     shm_ptr->focus[0]=focus[0];
     shm_ptr->focus[1]=focus[1];
     shm_ptr->focus[2]=focus[2];
-    for(int j=0;j<NKEYS;j++) for(int i=0;i<4;i++){
+    for(j=0;j<NKEYS;j++) for(i=0;i<4;i++){
         if(i!=3)shm_ptr->key[j][i]=backlight[i];
         else shm_ptr->key[j][i]=0;
     }
@@ -169,16 +172,16 @@ int main(int argc, char **argv){
         begintime = clock(); //set the start time for measuring time spent for keyboard LED update
         newstate=kbstat();
         if(state!=newstate && state != FAULT && shm_ptr->effect==SM_EFFECT_NONE){ //if the keyboard state changed, read successfully and the keyboard isn't in an effect mode then update the caps/scroll/num lock LEDs
-	        state=newstate;
-	        it829x_init();
-	        it829x_setled(K_CAPSL,    (state & CAPLOC)? shm_ptr->focus:shm_ptr->backlight);
-	        it829x_setled(K_CAPSR,    (state & CAPLOC)? shm_ptr->focus:shm_ptr->backlight);
-	        it829x_setled(K_NUM_LOCK, (state & NUMLOC)? shm_ptr->focus:shm_ptr->backlight);
-	        it829x_setled(K_INSERT,   (state & SCRLOC)? shm_ptr->focus:shm_ptr->backlight);
-	        it829x_close();
-	        //update the key state array:
-	        sharedmem_lock();
-            for(int i=0;i<3;i++){ //update the state in shared memory
+            state=newstate;
+            it829x_init();
+            it829x_setled(K_CAPSL,    (state & CAPLOC)? shm_ptr->focus:shm_ptr->backlight);
+            it829x_setled(K_CAPSR,    (state & CAPLOC)? shm_ptr->focus:shm_ptr->backlight);
+            it829x_setled(K_NUM_LOCK, (state & NUMLOC)? shm_ptr->focus:shm_ptr->backlight);
+            it829x_setled(K_INSERT,   (state & SCRLOC)? shm_ptr->focus:shm_ptr->backlight);
+            it829x_close();
+            //update the key state array:
+            sharedmem_lock();
+            for(i=0;i<3;i++){ //update the state in shared memory
                 shm_ptr->key[findkey(K_CAPSL   )][i]=(state & CAPLOC)? shm_ptr->focus[i]:shm_ptr->backlight[i];
                 shm_ptr->key[findkey(K_CAPSR   )][i]=(state & CAPLOC)? shm_ptr->focus[i]:shm_ptr->backlight[i];
                 shm_ptr->key[findkey(K_NUM_LOCK)][i]=(state & NUMLOC)? shm_ptr->focus[i]:shm_ptr->backlight[i];
@@ -187,61 +190,102 @@ int main(int argc, char **argv){
             shm_ptr->lastcputime=cputime; //update cpu end time, this will be overwritten if something else happened in the same cycle
             sharedmem_unlock(); 
             lockupdate=1;
-	    }
-	    if(shm_ptr->status!=0){
-	        //printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i\n", shm_ptr->status, //debug to verify flags are set properly
+        }
+        if(shm_ptr->status!=0){
+            //printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i\n", shm_ptr->status, //debug to verify flags are set properly
             //    shm_ptr->status & 1,(shm_ptr->status>>1) & 1,(shm_ptr->status>>2) & 1,(shm_ptr->status>>3) & 1,(shm_ptr->status>>4) & 1,(shm_ptr->status>>5) & 1,(shm_ptr->status>>6) & 1,(shm_ptr->status>>7) & 1,(shm_ptr->status>>8) & 1);
-	        sharedmem_lock();
-	        if(shm_ptr->status & SM_SSPD){ //scan speed update
-	            if(shm_ptr->scanspeed>1){
-	                printf("Update scan speed changed from %u ms -> %u ms\n",scanspeed,shm_ptr->scanspeed);
-	                scanspeed=shm_ptr->scanspeed;
-	            }
-	            else printf("Scan speed out of range (1-65535 ms): %u ms\n",shm_ptr->scanspeed);
-	        }
-	        if(shm_ptr->status & (SM_B | SM_BI | SM_S | SM_SI)){
-	            if(shm_ptr->status & SM_BI){
-	                printf("Inc/dec brightness: %i -> ",shm_ptr->brightness);
-	                if(shm_ptr->brightness==MINBRIGHT && shm_ptr->brightnessinc==-1) shm_ptr->brightness=MINBRIGHT;
-	                else shm_ptr->brightness += shm_ptr->brightnessinc;
-	            }
-	            if(shm_ptr->status & SM_SI){
-	                printf("Inc/dec speed: %i -> ",shm_ptr->speed);
-	                if(shm_ptr->speed==MINSPEED && shm_ptr->speedinc==-1) shm_ptr->speed=MINSPEED;
-	                else shm_ptr->speed += shm_ptr->speedinc;
-	                printf("%i\n",shm_ptr->speed);
-	            }
-	            if(shm_ptr->brightness>MAXBRIGHT) shm_ptr->brightness=MAXBRIGHT;
-	            if(shm_ptr->speed>MAXSPEED) shm_ptr->speed=MAXSPEED;
-	            if(it829x_init()==-1 || it829x_brightspeed(shm_ptr->brightness, shm_ptr->speed)==-1) printf("Error setting brightness from shared memory\n"); //send updates to keyboard
+            sharedmem_lock();
+            if(shm_ptr->status & SM_SSPD){ //handle kbled loop scan speed update
+                if(shm_ptr->scanspeed>1){
+                    printf("Update scan speed changed from %u ms -> %u ms\n",scanspeed,shm_ptr->scanspeed);
+                    scanspeed=shm_ptr->scanspeed;
+                }
+                else printf("Scan speed out of range (1-65535 ms): %u ms\n",shm_ptr->scanspeed);
+            }
+            if(shm_ptr->status & (SM_B | SM_BI | SM_S | SM_SI)){ //handle brightness and speed changes
+                if(shm_ptr->status & SM_BI){
+                    printf("Inc/dec brightness: %i -> ",shm_ptr->brightness);
+                    if(shm_ptr->brightness==MINBRIGHT && shm_ptr->brightnessinc==-1) shm_ptr->brightness=MINBRIGHT;
+                    else shm_ptr->brightness += shm_ptr->brightnessinc;
+                }
+                if(shm_ptr->status & SM_SI){
+                    printf("Inc/dec speed: %i -> ",shm_ptr->speed);
+                    if(shm_ptr->speed==MINSPEED && shm_ptr->speedinc==-1) shm_ptr->speed=MINSPEED;
+                    else shm_ptr->speed += shm_ptr->speedinc;
+                    printf("%i\n",shm_ptr->speed);
+                }
+                if(shm_ptr->brightness>MAXBRIGHT) shm_ptr->brightness=MAXBRIGHT;
+                if(shm_ptr->speed>MAXSPEED) shm_ptr->speed=MAXSPEED;
+                if(it829x_init()==-1 || it829x_brightspeed(shm_ptr->brightness, shm_ptr->speed)==-1) printf("Error setting brightness from shared memory\n"); //send updates to keyboard
                 it829x_close();
-                printf("Updated brightness/speed:: %i , %i\n",shm_ptr->brightness,shm_ptr->speed);
-	        }
-	        if(shm_ptr->status & SM_BL){
-	            for(int i=0;i<3;i++) {
-	                for(int j=0;j<NKEYS;j++) shm_ptr->key[j][i]=shm_ptr->backlight[i]; //update key state array
-	            }
-	            if(it829x_init()==-1 || it829x_setleds(allkeys, NKEYS, shm_ptr->backlight)==-1) printf("Error setting backlight from shared memory\n");
-	            it829x_close();
-	            printf("backlight: R:%i G:%i B:%i\n",shm_ptr->backlight[0],shm_ptr->backlight[1],shm_ptr->backlight[2]);
-	            state=0xFF;
-	        }
-	        if(shm_ptr->status & SM_FO){
-	            for(int i=0;i<3;i++) focus[i]=shm_ptr->focus[i];
-	            printf("focus: R:%i G:%i B:%i\n",shm_ptr->focus[0],shm_ptr->focus[1],shm_ptr->focus[2]);
-	            state=0xFF;
-	        }
-	        
-	        shm_ptr->status=0;
-	        shm_ptr->lastcputime=cputime; //update cpu end time
-	        sharedmem_unlock();
-	    }
-	    endtime = clock(); //set the end time for measureing time spend for keyboard LED update
-	    if(state==0xFF || lockupdate!=0) {
-	        cputime = ((double) (endtime - begintime)) / CLOCKS_PER_SEC; //if the keyboard LEDs were updated, update the last loop time
-	        lockupdate=0; //reset lockupdate flag back to zero
-	    }
-    }
+                printf("Updated brightness/speed: %i , %i\n",shm_ptr->brightness,shm_ptr->speed);
+            }
+            if(shm_ptr->status & (SM_E | SM_EI)){ //handle effect change and increment
+                if(shm_ptr->status & SM_EI){
+                    printf("Inc/dec effect: %i -> ",shm_ptr->effect);
+                    if(shm_ptr->effect==SM_EFFECT_NONE && shm_ptr->effectinc==-1) shm_ptr->effect=SM_EFFECT_SNAKE;  //decrement only until the effect is equal to the lowest value, -1 (no effect) and then wrap around
+                    else shm_ptr->effect += shm_ptr->effectinc;
+                }
+                if(shm_ptr->effect > SM_EFFECT_SNAKE) shm_ptr->effect=SM_EFFECT_NONE;  //if you're at the end of the list then roll back around to the beginning, change this to SM_EFFECT_SNAKE to stay at the last event rather than rolling over
+                if(shm_ptr->effect>=0){
+                    if(it829x_init()==-1 || it829x_reset()==-1 || it829x_brightspeed(shm_ptr->brightness, shm_ptr->speed)==-1 || it829x_effect(shm_ptr->effect)==-1){
+                        printf("Error setting effect from shared memory\n"); //send updates to keyboard
+                    }
+                 }
+                 if(shm_ptr->effect==SM_EFFECT_NONE){
+                    if(it829x_init()==0) {
+                        it829x_reset();
+                        it829x_brightspeed(shm_ptr->brightness, shm_ptr->speed);
+                        shm_ptr->status |= (SM_BL | SM_FO); //make sure to update the backlight and focus colors if we're out of effect mode
+                        state=0xFF;  //force an update of the lock key states when we go back to normal mode
+                    }
+                    else printf("Error opening connection to USB\n");
+                }
+                it829x_close();
+                printf("Updated effect: %i\n",shm_ptr->effect);
+            }
+            if(shm_ptr->status & SM_PALT){
+                shm_ptr->colorindex++;
+                if(shm_ptr->colorindex>=SM_NUMCOLORS) shm_ptr->colorindex=0;
+                if(shm_ptr->effect!=SM_EFFECT_NONE){
+                    if(it829x_init()==0) {
+                        it829x_reset();
+                        it829x_brightspeed(shm_ptr->brightness, shm_ptr->speed);
+                    }
+                    else printf("Error opening connection to USB\n");
+                }
+                for(i=0;i<3;i++){
+                    shm_ptr->backlight[i]=pallete[shm_ptr->colorindex].backlight[i];
+                    shm_ptr->focus[i]=pallete[shm_ptr->colorindex].focus[i];
+                }
+                shm_ptr->status |= (SM_BL | SM_FO); //make sure to update the backlight and focus colors if we're out of effect mode
+                state=0xFF;  //force an update of the lock key states when we go back to normal mode
+            }
+            if((shm_ptr->status & SM_BL) && (shm_ptr->effect==SM_EFFECT_NONE)){ //handle backlight color change but only if we're not displaying an effect
+                for(i=0;i<3;i++) {
+                    for(j=0;j<NKEYS;j++) shm_ptr->key[j][i]=shm_ptr->backlight[i]; //update key state array
+                }
+                if(it829x_init()==-1 || it829x_setleds(allkeys, NKEYS, shm_ptr->backlight)==-1) printf("Error setting backlight from shared memory\n");
+                it829x_close();
+                printf("backlight: R:%i G:%i B:%i\n",shm_ptr->backlight[0],shm_ptr->backlight[1],shm_ptr->backlight[2]);
+                state=0xFF;
+            }
+            if((shm_ptr->status & SM_FO) && (shm_ptr->effect==SM_EFFECT_NONE)){ //handle focus color change but only if we're not displaying an effect
+                for(i=0;i<3;i++) focus[i]=shm_ptr->focus[i];
+                printf("focus: R:%i G:%i B:%i\n",shm_ptr->focus[0],shm_ptr->focus[1],shm_ptr->focus[2]);
+                state=0xFF;  //force an update of the lock key states since the focus color changed
+            }
+            
+            shm_ptr->status=0; //reset status flag since we just handled them all
+            shm_ptr->lastcputime=cputime; //update cpu end time
+            sharedmem_unlock();
+            }
+        }
+        endtime = clock(); //set the end time for measureing time spend for keyboard LED update
+        if(state==0xFF || lockupdate!=0) {
+            cputime = ((double) (endtime - begintime)) / CLOCKS_PER_SEC; //if the keyboard LEDs were updated, update the last loop time
+            lockupdate=0; //reset lockupdate flag back to zero
+        }
     printf("Exiting... something yet to be discovered did not go as planned and broke out of the while(1) loop!\n");
     sd_notify(0, "STATUS=kbled encountered an unknown fault and is shutting down");
     sharedmem_masterclose(SM_VERBOSE);

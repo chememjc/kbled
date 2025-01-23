@@ -50,8 +50,8 @@ int validrgb(const char *value) {
 
 void printstructure(struct shared_data *data, char type) {
     // Print each member of the structure
-    printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i\n", data->status,
-        data->status & 1,(data->status>>1) & 1,(data->status>>2) & 1,(data->status>>3) & 1,(data->status>>4) & 1,(data->status>>5) & 1,(data->status>>6) & 1,(data->status>>7) & 1,(data->status>>8) & 1);
+    printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i SM_SSPD: %i\n", data->status,
+        data->status & 1,(data->status>>1) & 1,(data->status>>2) & 1,(data->status>>3) & 1,(data->status>>4) & 1,(data->status>>5) & 1,(data->status>>6) & 1,(data->status>>7) & 1,(data->status>>8) & 1,(data->status>>8) & 1);
     printf("Brightness: %u\n", data->brightness);
     printf("Brightness Increment: %d\n", data->brightnessinc);
     printf("Speed: %u\n", data->speed);
@@ -201,6 +201,7 @@ int main(int argc, char *argv[]) {
         else if (strcmp(argv[i], "-c") == 0) {
             // Cycle through preset backlight/focus colors
             if(verbose)printf("Cycle through preset backlight/focus colors\n");
+            new_ptr.status |= SM_PALT; //set update flag
             i++;
         }
         else if (strcmp(argv[i], "-k") == 0) {
@@ -294,7 +295,10 @@ int main(int argc, char *argv[]) {
         }
     }
     
-    sharedmem_slaveinit(verbose);
+    if(sharedmem_slaveinit(verbose)!=0){
+        fprintf(stderr, "Failed to connect to kbled daemon, are you sure it is running?\n");
+        return 1;
+    }
     if(verbose)printf("Semaphore opened\n");
     // Wait (lock) the semaphore before accessing shared memory and making updates;
     sharedmem_lock(); //lock semaphore **************************************************************************************

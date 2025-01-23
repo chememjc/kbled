@@ -24,6 +24,7 @@
 #define SM_FO   0x0080  //focus color updated
 #define SM_KEY  0x0100  //individual key color updated
 #define SM_SSPD 0x0200  //Scan speed updated
+#define SM_PALT 0x0400  //color pallete index updated
 
 // shared_data key[3] update flags, set to toggle individual key state
 #define SM_NOUPD    0   //no update
@@ -40,6 +41,9 @@
 #define SM_EFFECT_RANDOM    4
 #define SM_EFFECT_RIPPLE    5  //doesn't seem to work on my bonw15/clevo x370 laptop with System76 firmware
 #define SM_EFFECT_SNAKE     6
+
+//color pallete
+#define SM_NUMCOLORS 10 //set this to the number of default colors you have configured.  They are defined in sharedmem.c
 
 #define SEM_NAME "/kbled_semaphore"  // Semaphore name to synchronize access to shared memory
 #define SEM_TIMEOUT_MS 1000 //semaphore timeout value; if blocked for longer than this time, ignore the semaphore and proceed
@@ -61,12 +65,19 @@ struct shared_data {
     char speedinc;  //speed increment +1 or -1, 0 for unchanged
     char effect; //absolute effect -1 to 6: -1=none, 0[Wave, Breathe, Scan, Blink, Random, Ripple, Snake]6  Note:ripple doesn't seem to work on bonw15
     char effectinc; //effect increment +1 or -1, 0 for unchanged
+    unsigned char colorindex; //index of current color pallete item
     unsigned char backlight[3]; //[R,G,B] 0-255 for each.  All keys
     unsigned char focus[3];  //[R,G,B] 0-255 for each, focus color (caps lock, num lock, scroll lock active)
     unsigned char key[NKEYS][4]; //RGB + update field for each key key[4] values are 0=no update, 1=updated, 2=use backlight color, 3=use focus color
 };
 
+struct colorpallete {
+    unsigned char backlight[3]; //[R,G,B] for backlight
+    unsigned char focus[3]; //[R,G,B] for focus
+};
+
 extern struct shared_data *shm_ptr;
+extern struct colorpallete pallete[SM_NUMCOLORS];
 
 
 int sharedmem_masterinit(char verbose);  //initialize master for shared memory and semaphore (allocates shared memory and semaphore)

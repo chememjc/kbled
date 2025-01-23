@@ -18,6 +18,19 @@
 #include <errno.h>
 #include "sharedmem.h"
 
+struct colorpallete pallete[SM_NUMCOLORS]={
+    {{255, 0, 0},{0, 255, 255}},   // Red backlight, Cyan focus
+    {{0, 255, 0},{255, 0, 255}},   // Green backlight, Magenta focus
+    {{0, 0, 255},{255, 255, 0}},   // Blue backlight, Yellow focus
+    {{255, 165, 0},{0, 0, 255}},   // Orange backlight, Blue focus
+    {{255, 255, 0},{0, 255, 255}}, // Yellow backlight, Cyan focus
+    {{0, 128, 128},{255, 0, 0}},   // Teal backlight, Red focus
+    {{255, 105, 180},{0, 128, 0}}, // Hot pink backlight, Dark green focus
+    {{0, 255, 127},{255, 69, 0}},  // Spring green backlight, Orange-red focus
+    {{255, 20, 147},{0, 0, 255}},  // Deep pink backlight, Blue focus
+    {{0, 255, 255},{255, 0, 255}}  // Cyan backlight, Magenta focus
+};
+
 int shm_id;
 struct shared_data *shm_ptr;
 sem_t *sem;

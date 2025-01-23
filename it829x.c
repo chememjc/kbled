@@ -16,6 +16,7 @@ hid_device *keyboard;  //global pointer to usb handle
 uint8_t initcmd[7] = {0xCC, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x7F};  //command string to send a 'reset'
 uint8_t brightspeedcmd[7] = {0xCC, 0x09, MAXBRIGHT, MAXSPEED, 0x00, 0x00,0x7F}; //command string to update the key brightness and speed
 uint8_t setledcmd[7] = {0xCC, 0x01, K_ESC, RMIN, GMIN, BMIN, 0x7F}; //command string to set an individual LED's color
+#define NUMMODES 7
 uint8_t modecmd[7][7] = {
     {0xCC, 0x00, 0x04, 0x00, 0x00, 0x00, 0x7F},  //* 	0	Wave
     {0xCC, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x7F},  //* 	1	Breathe
@@ -33,15 +34,16 @@ int8_t it829x_init(){
     }
     return 0;
 }
-void it829x_close(){
+int8_t it829x_close(){
     hid_close(keyboard);
+    return 0;
 }
 int8_t it829x_reset(){
     return it829x_send(initcmd);
 }
 int8_t it829x_brightspeed(uint8_t bright, uint8_t speed){
     if(bright>0x0A || speed>0x02){
-        printf("Out of range: bright(0x00-0x0A):0x%02x speed(0x00-0x02): 0x%02x",bright,speed);
+        printf("Out of range: bright(0x00-0x0A):0x%02x speed(0x00-0x02): 0x%02x\n",bright,speed);
         return -2;
     }
     brightspeedcmd[2]=bright;
@@ -62,6 +64,13 @@ int8_t it829x_setleds(uint8_t *keys, uint8_t nkeys, uint8_t *color){
         return -1; //return failure if any of the transactions failed
     }
     return 0; //success
+}
+int8_t it829x_effect(int8_t mode){
+    if(mode>=0 && mode<NUMMODES) return it829x_send(modecmd[mode]);
+    else{
+        printf("Incorrect mode of %u: limits 0-%u\n",mode,NUMMODES-1);
+        return -2;
+    }
 }
 int8_t it829x_setled(uint8_t key, uint8_t *color){
     setledcmd[2]=key;
