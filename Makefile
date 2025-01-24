@@ -1,6 +1,5 @@
 # Compiler and flags
 CC = gcc
-
 ########uncomment for X11 based caps lock, num lock and scroll lock determination
 #TYPE = X11
 #XTRALIBS = -lX11 -lxkbfile # for X11 this should be -lX11 -lxkbfile
@@ -37,6 +36,11 @@ LIBS3 =
 # Define the installation directories
 INIT_DIR = /etc/systemd/system
 BIN_DIR = /usr/bin
+
+# Define variables for the .deb file creation
+VERSION=$(shell cat release)
+CURRENT_DATE=$(shell date +%-Y%02m%02d)
+VERSION_DATE=$(VERSION).$(CURRENT_DATE)
 
 # Default target
 all: $(TARGET1) $(TARGET2) $(TARGET3)
@@ -89,6 +93,11 @@ $(TARGET3): $(OBJ3)
 
 # Clean up build artifacts
 clean:
-	rm -f $(TARGET1) $(TARGET2) $(TARGET3) *.o
+	rm -f $(TARGET1) $(TARGET2) $(TARGET3) *.o *.deb *.tar.gz
+	./pkg/makepkg.sh clean
 
-.PHONY: all clean install uninstall kbled kbledclient semsnoop
+# Distribution target to create .deb package
+distribution: all
+	./pkg/makepkg.sh
+
+.PHONY: all clean install uninstall kbled kbledclient semsnoop distribution

@@ -22,7 +22,7 @@
 #define DEFAULTBKLT {0,0,0} //default backlight RGB value
 #define DEFAULTFOCUS {0,127,0} //default focus RGB value
 #define DEFAULTBRIGHT MAXBRIGHT //default brightness value
-#define DEFAULTSPEED 0 //default speed
+#define DEFAULTSPEED 1 //default speed
 #define DEFAULTEFFECT SM_EFFECT_NONE //default keyboard effect, -1=no effect (normal operation)
 
 void sighandle(int sig, siginfo_t *info, void *context) {

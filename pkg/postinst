@@ -1,0 +1,7 @@
+#!/bin/sh
+# Enable the systemd service
+systemctl enable kbled.service
+# Start the systemd service
+systemctl start kbled.service
+# Exit successfully
+exit 0

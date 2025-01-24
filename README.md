@@ -48,7 +48,7 @@ Usage: kbledclient [parameters...]
  -p <-1 to 6>                 Set pattern, (default=-1 [no pattern])
  -bl <Red> <Grn> <Blu>        Set backlight color
  -fo <Red> <Grn> <Blu>        Set focus color (caps/num/scroll locks)
- -c                           Cycle through preset backlight/focus colors
+ -c                           Cycle through preset backlight/focus color
  -k <LED#> <Red> <Grn> <Blu>  Set individual LED (0-114) color
  -kb <LED#>                   Set individual LED (0-114) to backlight color
  -kf <LED#>                   Set individual LED (0-114) to focus color
@@ -122,28 +122,28 @@ sudo apt install system76-keyboard-configurator
 
 Run it from the command line by typing `system76-keyboard-configurator`, it will ask for your password to run it as root since you will be modifying the settings on the embedded controller (EC).  Click on the button on the 'Configure Keyboard' button in the bottom center.  (note: the print screen button is highlighted since I pressed that key for the screen capture)
 
-![system76-keyboard-configurator](img/system76-keyboard-configurator-main.png)
+![system76-keyboard-configurator](doc/img/system76-keyboard-configurator-main.png)
 
 Next, click on the 'Layer 2' button on the top middle right to get to where the LED keys are mapped:
 
-![Switching to keyboard layer 2](img/system76-keyboard-configurator-layer2.png)
+![Switching to keyboard layer 2](doc/img/system76-keyboard-configurator-layer2.png)
 
 For each of the 'LED Color' 'LED On Off' 'LED Darken' 'LED Brightness' keys, click on the key (it will be outlined when you click) and remap it back to the respective keys from the 'Numpad' section by clicking on them.  They should look like this afterwards:
 
-![Updated keyboard map](img/system76-keyboard-configurator-updated.png)
+![Updated keyboard map](doc/img/system76-keyboard-configurator-updated.png)
 
 ### Adding new LED hotkey mappings
 This might be a bit different in other distributions than PopOS! 22.04 LTS, but you should be able to do something through a similar set of steps.  Go into settings and select keyboard from the list on the left.  Then click on 'View and Customize Shortcuts' on the bottom of the right frame:
 
-![Keyboard settings](img/settings-keyboard.png)
+![Keyboard settings](doc/img/settings-keyboard.png)
 
 From there a 'Keyboard Shortcuts' window will open, scroll to the bottom and select 'Custom Shortcuts':
 
-![Keyboard shortcut window](img/settings-keyboard-shortcuts.png)
+![Keyboard shortcut window](doc/img/settings-keyboard-shortcuts.png)
 
 Click on the plus button on the bottom, this will open another window, 'Add Custom Shortcut', where you can assign it a name, command and shortcut sequence:
 
-![Keyboard shortcut edit window](img/settings-keyboard-shortcut.png)
+![Keyboard shortcut edit window](doc/img/settings-keyboard-shortcut.png)
 
 Here is how I have it setup on my computer.  When clicking on the 'Set Shortcut' you can't seem to include the function key as a modifier so I had to compromise and use the control key.  See the 'More Detail' section for an explanation of why this is the case and how I might end up trying to get it to work with the function key in the future.  In case you're worried (I was) the - key and + key on the main keyboard are different than the ones on the numpad so it won't conflict with zooming in and out in a web browser with `Ctrl =` and `Ctrl -`.
 
@@ -178,6 +178,12 @@ Library for interacting with the `/dev/input/eventX` interface to the keyboard. 
 #### Installing the dependencies:
 ```bash
 sudo apt install libhidapi-dev libx11-dev libxkbfile-dev libevdev-dev
+```
+
+#### Dependencies for making the .deb release package: (only needed to run `make distribution`)
+Install `devscripts` to make it possible to generate a .deb file for the distribution.  This is not needed unless you are making the .deb distribution.
+```text
+sudo apt install devscripts dh-make
 ```
 
 # License
