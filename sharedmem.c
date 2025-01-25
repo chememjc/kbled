@@ -24,7 +24,7 @@ struct colorpallete pallete[SM_NUMCOLORS]={
     {{0, 0, 255},{255, 255, 0}},   // Blue backlight, Yellow focus
     {{255, 165, 0},{0, 0, 255}},   // Orange backlight, Blue focus
     {{255, 255, 0},{0, 255, 255}}, // Yellow backlight, Cyan focus
-    {{0, 128, 128},{255, 0, 0}},   // Teal backlight, Red focus
+    {{2, 0, 0},{0, 255, 0}},       // dim red backlight, Green focus
     {{255, 105, 180},{0, 128, 0}}, // Hot pink backlight, Dark green focus
     {{0, 255, 127},{255, 69, 0}},  // Spring green backlight, Orange-red focus
     {{255, 20, 147},{0, 0, 255}},  // Deep pink backlight, Blue focus
@@ -194,7 +194,7 @@ void sharedmem_unlock(){
 }
 
 int sharedmem_masterclose(char verbose) {
-    //shutdown sequence
+    // Shutdown sequence
     // Detach from the shared memory segment
     int problem=0; //count the number of problems encountered during the process
     FILE *file;
@@ -243,4 +243,27 @@ int sharedmem_slaveclose(char verbose) {
         return 1;
     }
     return 0;
+}
+
+int sharedmem_daemonstatus() {
+    FILE *file = fopen(TOKEN_FILE, "r"); // Open the file for reading
+    if (file == NULL) return 0;  // Return 0 since file doesn't exist and daemon isn't running
+
+    char line[32]; // Buffer to store the line read from the file
+
+    // Read the first line of the file
+    if (fgets(line, sizeof(line), file) == NULL) {
+        fclose(file);
+        printf("Error reading from %s: check permissions?\n",TOKEN_FILE);
+        return 0;  // probably indicates daemon isn't running or there is an issue with permisssions, either way we can't access the shared memory later so return 0
+    }
+    fclose(file); // Close the file after reading
+    
+    line[strcspn(line, "\n")] = 0; // strip whitespace and newlines
+
+    if (strcmp(line, "0") == 0) { // Compare see if the line is "0" to see if the daemon is running
+        return 0;  // Return 0 if the line is "0" since that means the daemon is not running
+    } else {
+        return 1;  // Return 1 if the line is non-zero since that indicated the program is running
+    }
 }

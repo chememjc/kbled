@@ -14,17 +14,23 @@
 #define PROJECT_ID 'A'  // The project ID used to generate the ftok key
 
 // shared_data status flags:
-#define SM_B    0x0001  //brightness updated
-#define SM_BI   0x0002  //brightness increment updated
-#define SM_S    0x0004  //speed updated
-#define SM_SI   0x0008  //speed increment updated
-#define SM_E    0x0010  //effect updated
-#define SM_EI   0x0020  //effect increment updated
-#define SM_BL   0x0040  //backlight color updated
-#define SM_FO   0x0080  //focus color updated
-#define SM_KEY  0x0100  //individual key color updated
-#define SM_SSPD 0x0200  //Scan speed updated
-#define SM_PALT 0x0400  //color pallete index updated
+#define SM_B     0x0001  //brightness updated
+#define SM_BI    0x0002  //brightness increment updated
+#define SM_S     0x0004  //speed updated
+#define SM_SI    0x0008  //speed increment updated
+#define SM_E     0x0010  //effect updated
+#define SM_EI    0x0020  //effect increment updated
+#define SM_BL    0x0040  //backlight color updated
+#define SM_FO    0x0080  //focus color updated
+#define SM_KEY   0x0100  //individual key color updated
+#define SM_SSPD  0x0200  //Scan speed updated
+#define SM_PALT  0x0400  //color pallete index updated
+#define SM_ONOFF 0x0800  //update on/off state of keyboard backlight
+
+// on/off status/toggle for toggle
+#define SM_OFF   0
+#define SM_ON    1
+#define SM_TOG   2  //toggle current staet+
 
 // shared_data key[3] update flags, set to toggle individual key state
 #define SM_NOUPD    0   //no update
@@ -59,6 +65,7 @@ struct shared_data {
     double lastcputime; //contains the time in seconds it took to run through the last loop where a change was made to the keyboard LEDs
     double idlecputime; //contains the time in seconds it took to run through a loop where nothing was updated
     uint16_t scanspeed; //scan speed
+    unsigned char onoff; //set and toggle the keyboard on or off
     unsigned char brightness; //absolute brightness 0-10
     char brightnessinc;  //brightness increment +1 or -1, 0 for unchanged
     unsigned char speed; //absolute speed set 0-2
@@ -86,5 +93,6 @@ int sharedmem_masterclose(char verbose); //master: disconnect from shared memory
 int sharedmem_slaveclose(char verbose);  //slave: disconeect from shared memory but do not deallocate shared memory or semaphore
 int sharedmem_lock();       //acquire a lock on shared memory, timeout after SEM_TIMEOUT_MS milliseconds (decrement semaphore)
 void sharedmem_unlock();     //relinquish a lock on shared memory (increment semaphore)
+int sharedmem_daemonstatus(); //return 1 if the daemon is running, return 0 if the daemon is not running
 
 #endif // SHARED_MEMORY_H

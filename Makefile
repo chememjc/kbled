@@ -16,7 +16,13 @@ CFLAGS = -D$(TYPE) -Wall -Wextra -O3 #add/remove -g to toggle gdb debugging info
 TARGET1 = kbled
 TARGET2 = kbledclient
 TARGET3 = semsnoop
+
+# Other configuration files
 INITSCRIPT = kbled.service
+
+# Utility script installation targets
+UTILDIR = utils
+UTILSCRIPT1 = kbledcolorpicker
 
 # Source files
 SRC1 = daemon.c it829x.c keymap.c kbstatus.c sharedmem.c
@@ -60,9 +66,10 @@ install: check-root
 	install -m 755 $(TARGET1) $(BIN_DIR)/$(TARGET1)
 	install -m 755 $(TARGET2) $(BIN_DIR)/$(TARGET2)
 	install -m 755 $(TARGET3) $(BIN_DIR)/$(TARGET3)
+	install -m 755 $(UTILDIR)/$(UTILSCRIPT1).sh $(BIN_DIR)/$(UTILSCRIPT1)
 	@echo 
-	@echo To enable on startup run:  sudo systemctl enable kbled
-	@echo To start kbled now run:\ \ \ sudo systemctl start kbled
+	@echo "To enable on startup run:  sudo systemctl enable kbled"
+	@echo "To start kbled now run:    sudo systemctl start kbled"
 
 uninstall: check-root
 	#stop the service if it is running and disable it
@@ -74,6 +81,7 @@ uninstall: check-root
 	rm -f $(BIN_DIR)/$(TARGET1)
 	rm -f $(BIN_DIR)/$(TARGET2)
 	rm -f $(BIN_DIR)/$(TARGET3)
+	rm -f $(BIN_DIR)/$(UTILSCRIPT1)
 
 # Rule to build the TARGET1 executable
 $(TARGET1): $(OBJ1)

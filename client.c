@@ -19,6 +19,9 @@
 void print_usage(char *program_name) {
     fprintf(stderr, "Usage: %s [-v] [parameters...]\n", program_name);
     fprintf(stderr, " Parameter:                   Description:\n");
+    fprintf(stderr, " -on                          Turn backlight on\n");
+    fprintf(stderr, " -off                         Turn backlight off\n");
+    fprintf(stderr, " -tog                         Toggle backlight off->on or on->off\n");
     fprintf(stderr, " -v                           Verbose output\n");
     fprintf(stderr, " -b+                          Increase brightness\n");
     fprintf(stderr, " -b-                          Decrease brightness\n");
@@ -29,8 +32,8 @@ void print_usage(char *program_name) {
     fprintf(stderr, " -p+                          Increment pattern\n");
     fprintf(stderr, " -p-                          Decrement pattern\n");
     fprintf(stderr, " -p <-1 to 6>                 Set pattern, (default=-1 [no pattern])\n");
-    fprintf(stderr, " -bl <Red> <Grn> <Blu>        Set backlight color\n");
-    fprintf(stderr, " -fo <Red> <Grn> <Blu>        Set focus color (caps/num/scroll locks)\n");
+    fprintf(stderr, " -bl <Red> <Grn> <Blu>        Set global backlight color\n");
+    fprintf(stderr, " -fo <Red> <Grn> <Blu>        Set global focus color (caps/num/scroll locks)\n");
     fprintf(stderr, " -c                           Cycle through preset backlight/focus colors\n");
     fprintf(stderr, " -k <LED#> <Red> <Grn> <Blu>  Set individual LED (0-%i) color\n", NKEYS-1);
     fprintf(stderr, " -kb <LED#>                   Set individual LED (0-%i) to backlight color\n", NKEYS-1);
@@ -39,7 +42,7 @@ void print_usage(char *program_name) {
     fprintf(stderr, " --scan                       Change update speed (1 to 65535 ms) default= 100 ms\n");
     fprintf(stderr, " --dump                       Show contents of shared memory\n");
     fprintf(stderr, " --dump+                      Show contents of shared memory with each key's state\n");
-    fprintf(stderr, " --help                       Display this message\n");
+    fprintf(stderr, " -h or --help                Display this message\n");
     fprintf(stderr, " Where <Red> <Grn> <Blu> are 0-255\n");
 }
 
@@ -50,8 +53,10 @@ int validrgb(const char *value) {
 
 void printstructure(struct shared_data *data, char type) {
     // Print each member of the structure
-    printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i SM_SSPD: %i\n", data->status,
-        data->status & 1,(data->status>>1) & 1,(data->status>>2) & 1,(data->status>>3) & 1,(data->status>>4) & 1,(data->status>>5) & 1,(data->status>>6) & 1,(data->status>>7) & 1,(data->status>>8) & 1,(data->status>>8) & 1);
+    printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i \nSM_SSPD: %i SM_PALT: %i SM_ONOFF: %i SM_BIT13: %i SM_BIT14: %i SM_BIT15: %i SM_BIT16: %i\n", data->status,
+        data->status & 1,(data->status>>1) & 1,(data->status>>2) & 1,(data->status>>3) & 1,(data->status>>4) & 1,(data->status>>5) & 1,(data->status>>6) & 1,(data->status>>7) & 1,(data->status>>8) & 1,
+        (data->status>>9) & 1,(data->status>>10) & 1, (data->status>>11) & 1, (data->status>>12) & 1, (data->status>>13) & 1, (data->status>>14) & 1, (data->status>>15) & 1);
+    printf("On/Off state: %u\n", data->onoff);
     printf("Brightness: %u\n", data->brightness);
     printf("Brightness Increment: %d\n", data->brightnessinc);
     printf("Speed: %u\n", data->speed);
@@ -90,6 +95,27 @@ int main(int argc, char *argv[]) {
         if (strcmp(argv[i], "-v") == 0) {
             // Verbose output flag
             verbose = 1;
+            i++;
+        }
+        else if (strcmp(argv[i], "-on") == 0) {
+            // Increase brightness
+            if(verbose)printf("Turn backlight on\n");
+            new_ptr.onoff=SM_ON; //increment value
+            new_ptr.status |= SM_ONOFF; //set update flag
+            i++;
+        }
+        else if (strcmp(argv[i], "-off") == 0) {
+            // Increase brightness
+            if(verbose)printf("Turn backlight off\n");
+            new_ptr.onoff=SM_OFF; //increment value
+            new_ptr.status |= SM_ONOFF; //set update flag
+            i++;
+        }
+        else if (strcmp(argv[i], "-tog") == 0) {
+            // Increase brightness
+            if(verbose)printf("Toggle backlight on/off\n");
+            new_ptr.onoff |= SM_TOG; //increment value
+            new_ptr.status |= SM_ONOFF; //set update flag
             i++;
         }
         else if (strcmp(argv[i], "-b+") == 0) {
@@ -282,7 +308,7 @@ int main(int argc, char *argv[]) {
             memdump=2;
             i++;
         }
-        else if (strcmp(argv[i], "--help") == 0) {
+        else if ((strcmp(argv[i], "--help") == 0) || (strcmp(argv[i], "-h") == 0)) {
             // Increase brightness
             print_usage(argv[0]);
             return 1;
@@ -303,16 +329,17 @@ int main(int argc, char *argv[]) {
     // Wait (lock) the semaphore before accessing shared memory and making updates;
     sharedmem_lock(); //lock semaphore **************************************************************************************
     if(new_ptr.status!=0) shm_ptr->status=new_ptr.status;
-    if(new_ptr.status & SM_B)   shm_ptr->brightness=new_ptr.brightness;
-    if(new_ptr.status & SM_BI)  shm_ptr->brightnessinc=new_ptr.brightnessinc;
-    if(new_ptr.status & SM_S)   shm_ptr->speed=new_ptr.speed;
-    if(new_ptr.status & SM_SI)  shm_ptr->speedinc=new_ptr.speedinc;
-    if(new_ptr.status & SM_E)   shm_ptr->effect=new_ptr.effect;
-    if(new_ptr.status & SM_EI)  shm_ptr->effectinc=new_ptr.effectinc;
-    if(new_ptr.status & SM_BL)  for(i=0; i<3; i++) shm_ptr->backlight[i]=new_ptr.backlight[i];
-    if(new_ptr.status & SM_FO)  for(i=0; i<3; i++) shm_ptr->focus[i]=new_ptr.focus[i];
-    if(new_ptr.status & SM_KEY) for(i=0; i<4; i++) for(int j=0; j<NKEYS; j++) if(new_ptr.key[3]!=0)shm_ptr->key[j][i]=new_ptr.key[j][i];
-    if(new_ptr.status & SM_SSPD)   shm_ptr->scanspeed=new_ptr.scanspeed;
+    if(new_ptr.status & SM_ONOFF)   shm_ptr->onoff=((shm_ptr->onoff & 1) | (new_ptr.onoff & 1)) | (new_ptr.onoff & 2); //preserve state unless changed (first part) and set toggle flag
+    if(new_ptr.status & SM_B)       shm_ptr->brightness=new_ptr.brightness;
+    if(new_ptr.status & SM_BI)      shm_ptr->brightnessinc=new_ptr.brightnessinc;
+    if(new_ptr.status & SM_S)       shm_ptr->speed=new_ptr.speed;
+    if(new_ptr.status & SM_SI)      shm_ptr->speedinc=new_ptr.speedinc;
+    if(new_ptr.status & SM_E)       shm_ptr->effect=new_ptr.effect;
+    if(new_ptr.status & SM_EI)      shm_ptr->effectinc=new_ptr.effectinc;
+    if(new_ptr.status & SM_BL)      for(i=0; i<3; i++) shm_ptr->backlight[i]=new_ptr.backlight[i];
+    if(new_ptr.status & SM_FO)      for(i=0; i<3; i++) shm_ptr->focus[i]=new_ptr.focus[i];
+    if(new_ptr.status & SM_KEY)     for(i=0; i<4; i++) for(int j=0; j<NKEYS; j++) if(new_ptr.key[3]!=0)shm_ptr->key[j][i]=new_ptr.key[j][i];
+    if(new_ptr.status & SM_SSPD)    shm_ptr->scanspeed=new_ptr.scanspeed;
     if(memdump) printstructure(shm_ptr,memdump);
     if(cputime) printf("Last kbled daemon LED update time: %f ms, idle loop time %f ns\n", shm_ptr->lastcputime*1000.0,shm_ptr->idlecputime*1000.0);
     sharedmem_unlock(); //unlock semaphore  *********************************************************************************************************

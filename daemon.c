@@ -104,6 +104,10 @@ int main(int argc, char **argv){
     }
     
     //Start main code:
+    if(sharedmem_daemonstatus()!=0){ //check to see if daemon is already running; running multiple copies simultaneously would cause all sorts of trouble
+        printf("Warning: kbled is already running, close running instance before starting.\n");
+        return 1; //let system know there was a problem
+    }
     if (sd_notify(0, "STATUS=kbled is starting...") < 0) {
         printf("Systemd notifications not supported; running standalone. (i.e not started by systemd)\n");
     }
@@ -143,6 +147,7 @@ int main(int argc, char **argv){
     }
     sharedmem_lock(); //lock the structure from other processes
     shm_ptr->status=0;
+    shm_ptr->onoff=SM_ON;
     shm_ptr->scanspeed=UPDATE;
     shm_ptr->lastcputime=cputime;
     shm_ptr->brightness=DEFAULTBRIGHT;
@@ -274,6 +279,31 @@ int main(int argc, char **argv){
                 for(i=0;i<3;i++) focus[i]=shm_ptr->focus[i];
                 printf("focus: R:%i G:%i B:%i\n",shm_ptr->focus[0],shm_ptr->focus[1],shm_ptr->focus[2]);
                 state=0xFF;  //force an update of the lock key states since the focus color changed
+            }
+            if((shm_ptr->status & SM_KEY) && (shm_ptr->effect==SM_EFFECT_NONE)){ //handle focus color change but only if we're not displaying an effect
+                if(it829x_init()==0) {
+                    for(uint8_t k=0;k<NKEYS;k++){
+                        if(shm_ptr->key[k][3]==SM_UPD) it829x_setled(allkeys[k], shm_ptr->key[k]);
+                        if(shm_ptr->key[k][3]==SM_BKGND) it829x_setled(allkeys[k], shm_ptr->backlight);
+                        if(shm_ptr->key[k][3]==SM_FOCUS) it829x_setled(allkeys[k], shm_ptr->focus);
+                        shm_ptr->key[k][3]=SM_NOUPD;
+                    }
+                it829x_close();
+                printf("Updated individual keyboard keys: %i\n",shm_ptr->effect);
+                }
+                else printf("Error opening connection to USB\n");
+            }
+            if(shm_ptr->status & SM_ONOFF){ //turn the keyboard backlight on or off
+                if(shm_ptr->brightness==0) shm_ptr->brightness=1; //turn on to minimum brightness if it was set at 0 to avoid confusion of whether it changed state
+                if(shm_ptr->onoff & SM_TOG) shm_ptr->onoff= (shm_ptr->onoff & SM_ON) ^ SM_ON; //xor for toggle
+                if(shm_ptr->onoff==SM_ON){
+                    if(it829x_init()==-1 || it829x_brightspeed(shm_ptr->brightness, shm_ptr->speed)==-1) printf("Error setting brightness/speed for on/off state\n"); //keep the same state
+                }
+                else if(shm_ptr->onoff==SM_OFF){
+                    if(it829x_init()==-1 || it829x_brightspeed(0, shm_ptr->speed)==-1) printf("Error setting brightness/speed for on/off state\n"); //keep the same state
+                }
+                it829x_close();
+                printf("Keyboard backlight on/off: %i\n",shm_ptr->onoff);
             }
             
             shm_ptr->status=0; //reset status flag since we just handled them all
