@@ -1,21 +1,15 @@
 # Individually Addressable Keyboard LED Control Daemon
 ## Keyboard LED update program for ITE IT-829x based keyboard controllers
-I really like my System76 Bonobo WS (bonw15) laptop but have always found it extremely annoying when I accidentally hit the `Caps Lock` key and wouldn't know until I started typing since there is no visual indication.  The keyboard illumination controls from System76 allow you to turn the backlight on/off, the brightness up/down and cycle the colors through a predefined pallete.  If you dig further into `/sys/class/leds/system76_acpi::kbd_backlight/` you can change the RGB color and brightness but there is still no mechanism to control individual LEDS.  
+I really like my System76 Bonobo WS (bonw15) laptop but have always found it extremely annoying when I accidentally hit the `Caps Lock` key and don't find out until I started typing since there is no visual indication.  The keyboard illumination controls from System76 allow you to turn the backlight on/off, the brightness up/down and cycle the colors through a predefined pallete.  If you dig further into `/sys/class/leds/system76_acpi::kbd_backlight/` you can change the RGB color and brightness but there is still no mechanism to control individual LEDS.  
 
 This drove me to find a way to bypass the System76 driver and write my own.  I stumbled across a similar project where [matheusmoreira](https://github.com/matheusmoreira/ite-829x) decoded the signals between Clevo's windows based keyboard control software and the IT829x controller on his Clevo PA70ES (same chipset) to individually change keyboard LED states.  Using this, I was able to verify that it worked on my laptop as well.  I decided to use the decoded commands he found to write a lightweight daemon that could be loaded at boot time to handle the keyboard backlight and change the caps lock, scroll lock and num lock keys in addition to some other features I thought would be neat to have.
 
 The end result is this project that consists of two main programs, `kbled` (the daemon) and `kbledclient` (the program for interacting with `kbled`) along with a tool I called `semsnoop` that checks the state of semaphores to aid in debugging the two main programs.  
 
 ## Compatibility
-This software should work with any linux system with a ITE IT-829x USB keyboard controller.  If you are unsure, just look for device ID `048d:8910` with lsusb.  If it shows up on the list, then there is a good chance this software will work.  I have tested this with my System76 Bonobo WS (bonw15) laptop.  It is manufactured by Clevo as an X370SNW.  Here is how the device appears when I run `lsusb`:
+This software should work with any linux system with a ITE IT-829x USB keyboard controller.  If you are unsure, just look for device ID `048d:8910` with lsusb.  If it shows up on the list, then there is a good chance this software will work.  I have tested this with my System76 Bonobo WS (bonw15) laptop running Pop!_OS 22.04 LTS.  It is manufactured by Clevo as an X370SNW.  Here is how the device appears when I run `lsusb`:
 ```text
-Bus 004 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
-Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
-Bus 002 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
-Bus 001 Device 005: ID 048d:8910 Integrated Technology Express, Inc. ITE Device(829x) <-- This one!
-Bus 001 Device 003: ID 04f2:b7c3 Chicony Electronics Co., Ltd Chicony USB2.0 Camera
-Bus 001 Device 006: ID 8087:0033 Intel Corp. 
-Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+Bus 001 Device 005: ID 048d:8910 Integrated Technology Express, Inc. ITE Device(829x)
 ```
 
 ### `kbled` daemon:
@@ -49,8 +43,8 @@ Usage: kbledclient [parameters...]
  -p+                          Increment pattern
  -p-                          Decrement pattern
  -p <-1 to 6>                 Set pattern, (default=-1 [no pattern])
- -bl <Red> <Grn> <Blu>        Set backlight color
- -fo <Red> <Grn> <Blu>        Set focus color (caps/num/scroll locks)
+ -bl <Red> <Grn> <Blu>        Set global backlight color
+ -fo <Red> <Grn> <Blu>        Set global focus color (caps/num/scroll locks)
  -c                           Cycle through preset backlight/focus colors
  -k <LED#> <Red> <Grn> <Blu>  Set individual LED (0-114) color
  -kb <LED#>                   Set individual LED (0-114) to backlight color
@@ -95,11 +89,6 @@ sudo apt install -y libhidapi-dev libsystemd-dev libevdev-dev
 sudo dpkg -i kbled_1.0-20250124_amd64.deb
 ```
 
-You can completely uninstall `kbled` if it was installed with `dpkg` just as easily as the original installation.  This will also disable and stop the kbled daemon: <backup kbled.conf when implimented>
-```bash
-sudo dpkg --purge kbled
-```
-
 This will install the executables in `/usr/bin` and place the `kbled.conf` file in `/etc/systemd/system`.  It will also enable the service to start at reboot and start it immediately.  To check the status, stop or disable the service you can use `systemctl`:
 ```bash
 mcurtis@wopr:~$ systemctl status kbled
@@ -125,7 +114,12 @@ mcurtis@wopr:~$ systemctl status kbled
 Jan 24 01:25:34 wopr systemd[1]: Stopped kbled Service.
 ```
 
-## Compiling and Installing (still pretty easy)
+You can completely uninstall `kbled` if it was installed with `dpkg` just as easily as the original installation.  This will also disable and stop the kbled daemon: <!-- UNCOMMENT WHEN FETURE IMPLEMENTED: backup /etc/kbled/kbled.conf when uninstalling if you made any customizations and wish to reinstall the program with those customizeations later. !-->
+```bash
+sudo dpkg --purge kbled
+```
+
+## Compiling and Installing from Source (still pretty easy)
 Install dependencies for `hidapi-libusb` (used to communicate to the USB HID interface), `libsystemd-dev` (used to talk to systemd) and `libevdev` (used to capture caps lock/num lock/scroll lock states).  See the 'More Details' section for further instructions if you want to use `libX11` or `libxkbfile` instead of the default `libevdev` for capturing caps lock/num lock/scroll lock events.  You probably already have gcc, make and git, but if not you will also need to install `build-essential` and `git-all`.
 ```bash
 sudo apt update
