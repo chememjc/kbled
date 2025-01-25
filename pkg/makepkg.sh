@@ -121,7 +121,7 @@ fi
 
 if [ config != "" ]; then
     mkdir -p "$origin_dir$config_dir"
-    cp "$src_dir/$config" "$origin_dir$config"
+    cp "$src_dir/$config" "$origin_dir/etc/$config"
     echo "Copied $config to $config_dir"
 fi
 

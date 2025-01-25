@@ -13,7 +13,7 @@ Bus 001 Device 005: ID 048d:8910 Integrated Technology Express, Inc. ITE Device(
 ```
 
 ### `kbled` daemon:
-This program is designed to be launched during system startup by systemd with the included `kbled.conf`, though it can be run manually to verify it works before installation and for debugging.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock keys will be when active) by specifying them sequentially from the command line.  The default if nothing specified on the command line is a blank (0,0,0) backlight and a and a green (0,127,0) focus color. 
+This program is designed to be launched during system startup by systemd with the included `kbled.service`, though it can be run manually to verify it works before installation and for debugging.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock keys will be when active) by specifying them sequentially from the command line.  The default if nothing specified on the command line is a blank (0,0,0) backlight and a and a green (0,127,0) focus color. 
 
 Syntax: 
 ```
@@ -86,7 +86,7 @@ You will need to install the dependencies and download one of the .deb releases 
 cd ~/Downloads
 sudo apt update
 sudo apt install -y libhidapi-dev libsystemd-dev libevdev-dev
-sudo dpkg -i kbled_1.0-20250124_amd64.deb
+sudo dpkg -i kbled_0.7-20250125_amd64.deb
 ```
 
 This will install the executables in `/usr/bin` and place the `kbled.conf` file in `/etc/systemd/system`.  It will also enable the service to start at reboot and start it immediately.  To check the status, stop or disable the service you can use `systemctl`:
