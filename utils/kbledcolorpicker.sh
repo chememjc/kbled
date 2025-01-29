@@ -47,19 +47,19 @@ while true; do
   fi
 
   # Check if q key is pressed
-  if [[ $key =~ 'q' ]]; then
+  if [[ $key =~ [qQ] ]]; then
     echo -e "\nExiting script."
     break
   fi
 
   # Check if b key is pressed
-  if [[ $key =~ 'b' ]]; then
+  if [[ $key =~ [bB] ]]; then
     mode="b"
     echo -ne "\rBacklight Adjust Mode"
   fi
 
   # Check if f key is pressed
-  if [[ $key =~ 'f' ]]; then
+  if [[ $key =~ [fF] ]]; then
     mode="f"
     echo -ne "\rFocus Adjust Mode"
   fi

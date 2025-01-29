@@ -27,7 +27,7 @@
 
 void sighandle(int sig, siginfo_t *info, void *context) {
     // Print the signal name based on the signal number
-    printf("Received signal: %i @ %p\n",sig,info->si_addr);
+    printf("\nReceived signal: %i @ %p\n",sig,info->si_addr);
     switch (sig) {
         case SIGINT:
             printf("Received signal: SIGINT (Interrupt from keyboard)\n");

@@ -36,6 +36,7 @@
 #define SM_NOUPD    0   //no update
 #define SM_UPD      1   //updated, read new R=key[0] G=key[1] B=key[2]
 #define SM_BKGND    2   //use background color
+#define SM_BKLT     2   //use backlight color
 #define SM_FOCUS    3   //use focus color
 
 //Scan effects:
@@ -94,5 +95,6 @@ int sharedmem_slaveclose(char verbose);  //slave: disconeect from shared memory 
 int sharedmem_lock();       //acquire a lock on shared memory, timeout after SEM_TIMEOUT_MS milliseconds (decrement semaphore)
 void sharedmem_unlock();     //relinquish a lock on shared memory (increment semaphore)
 int sharedmem_daemonstatus(); //return 1 if the daemon is running, return 0 if the daemon is not running
+void sharedmem_printstructure(struct shared_data *data, char type); //Print out passed shared_data structure, type=1->no key status type=2->individual key status
 
 #endif // SHARED_MEMORY_H

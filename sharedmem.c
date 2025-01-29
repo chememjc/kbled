@@ -267,3 +267,32 @@ int sharedmem_daemonstatus() {
         return 1;  // Return 1 if the line is non-zero since that indicated the program is running
     }
 }
+
+void sharedmem_printstructure(struct shared_data *data, char type) {
+    // Print each member of the structure
+    printf("Status: 0x%04x SM_B:%i SM_BI:%i SM_S:%i SM_SI:%i SM_E:%i SM_EI:%i SM_BL:%i SM_FO:%i SM_KEY:%i \nSM_SSPD: %i SM_PALT: %i SM_ONOFF: %i SM_BIT13: %i SM_BIT14: %i SM_BIT15: %i SM_BIT16: %i\n", data->status,
+        data->status & 1,(data->status>>1) & 1,(data->status>>2) & 1,(data->status>>3) & 1,(data->status>>4) & 1,(data->status>>5) & 1,(data->status>>6) & 1,(data->status>>7) & 1,(data->status>>8) & 1,
+        (data->status>>9) & 1,(data->status>>10) & 1, (data->status>>11) & 1, (data->status>>12) & 1, (data->status>>13) & 1, (data->status>>14) & 1, (data->status>>15) & 1);
+    printf("On/Off state: %u\n", data->onoff);
+    printf("Brightness: %u\n", data->brightness);
+    printf("Brightness Increment: %d\n", data->brightnessinc);
+    printf("Speed: %u\n", data->speed);
+    printf("Speed Increment: %d\n", data->speedinc);
+    printf("Effect: %d\n", data->effect);
+    printf("Effect Increment: %d\n", data->effectinc);
+    
+    // Print the backlight (R, G, B values)
+    printf("Backlight (R,G,B): (%u, %u, %u)\n", data->backlight[0], data->backlight[1], data->backlight[2]);
+    
+    // Print the focus (R, G, B values)
+    printf("Focus (R,G,B): (%u, %u, %u)\n", data->focus[0], data->focus[1], data->focus[2]);
+    
+    // Print the key array if memdump=2
+    if(type==2){
+        printf("Keys: (R,G,B) Updt\n");
+        for (int j = 0; j < NKEYS; j++) {
+            printf("Key[%3d]:(%3u,%3u,%3u)%u ", j,data->key[j][0],data->key[j][1],data->key[j][2],data->key[j][3]);
+            if(j>1 && ((j+1)%3==0 || j==NKEYS-1)) printf("\n"); //put carraige return after printing out every 4 keys and at the end of the array
+        }
+    }
+}

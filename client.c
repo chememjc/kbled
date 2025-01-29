@@ -42,7 +42,7 @@ void print_usage(char *program_name) {
     fprintf(stderr, " --scan                       Change update speed (1 to 65535 ms) default= 100 ms\n");
     fprintf(stderr, " --dump                       Show contents of shared memory\n");
     fprintf(stderr, " --dump+                      Show contents of shared memory with each key's state\n");
-    fprintf(stderr, " -h or --help                Display this message\n");
+    fprintf(stderr, " -h or --help                 Display this message\n");
     fprintf(stderr, " Where <Red> <Grn> <Blu> are 0-255\n");
 }
 
@@ -325,9 +325,10 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Failed to connect to kbled daemon, are you sure it is running?\n");
         return 1;
     }
-    if(verbose)printf("Semaphore opened\n");
+    if(verbose)printf("Attached to shared memory\n");
     // Wait (lock) the semaphore before accessing shared memory and making updates;
     sharedmem_lock(); //lock semaphore **************************************************************************************
+    if(verbose)printf("Semahpre opened\n");
     if(new_ptr.status!=0) shm_ptr->status=new_ptr.status;
     if(new_ptr.status & SM_ONOFF)   shm_ptr->onoff=((shm_ptr->onoff & 1) | (new_ptr.onoff & 1)) | (new_ptr.onoff & 2); //preserve state unless changed (first part) and set toggle flag
     if(new_ptr.status & SM_B)       shm_ptr->brightness=new_ptr.brightness;
@@ -340,7 +341,7 @@ int main(int argc, char *argv[]) {
     if(new_ptr.status & SM_FO)      for(i=0; i<3; i++) shm_ptr->focus[i]=new_ptr.focus[i];
     if(new_ptr.status & SM_KEY)     for(i=0; i<4; i++) for(int j=0; j<NKEYS; j++) if(new_ptr.key[3]!=0)shm_ptr->key[j][i]=new_ptr.key[j][i];
     if(new_ptr.status & SM_SSPD)    shm_ptr->scanspeed=new_ptr.scanspeed;
-    if(memdump) printstructure(shm_ptr,memdump);
+    if(memdump) sharedmem_printstructure(shm_ptr,memdump);
     if(cputime) printf("Last kbled daemon LED update time: %f ms, idle loop time %f ns\n", shm_ptr->lastcputime*1000.0,shm_ptr->idlecputime*1000.0);
     sharedmem_unlock(); //unlock semaphore  *********************************************************************************************************
     if(verbose)printf("Semaphore closed\n");

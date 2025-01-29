@@ -1,10 +1,11 @@
 # Individually Addressable Keyboard LED Control Daemon
+![New Hotkey Mapping](doc/img/kbledinaction.png)
 ## Keyboard LED update program for ITE IT-829x based keyboard controllers
 I really like my System76 Bonobo WS (bonw15) laptop but have always found it extremely annoying when I accidentally hit the `Caps Lock` key and don't find out until I started typing since there is no visual indication.  The keyboard illumination controls from System76 allow you to turn the backlight on/off, the brightness up/down and cycle the colors through a predefined pallete.  If you dig further into `/sys/class/leds/system76_acpi::kbd_backlight/` you can change the RGB color and brightness but there is still no mechanism to control individual LEDS.  
 
 This drove me to find a way to bypass the System76 driver and write my own.  I stumbled across a similar project where [matheusmoreira](https://github.com/matheusmoreira/ite-829x) decoded the signals between Clevo's windows based keyboard control software and the IT829x controller on his Clevo PA70ES (same chipset) to individually change keyboard LED states.  Using this, I was able to verify that it worked on my laptop as well.  I decided to use the decoded commands he found to write a lightweight daemon that could be loaded at boot time to handle the keyboard backlight and change the caps lock, scroll lock and num lock keys in addition to some other features I thought would be neat to have.
 
-The end result is this project that consists of two main programs, `kbled` (the daemon) and `kbledclient` (the program for interacting with `kbled`) along with a tool I called `semsnoop` that checks the state of semaphores to aid in debugging the two main programs.  
+The end result is this project that consists of two main programs, `kbled` (the daemon) and `kbledclient` (the program for interacting with `kbled`) and a few support programs to show off the features.  `kbledpsmon` is a realtime process monitor/visualization.  It supports viewing processor saturation on each core, memory utilization, swap utilization and network saturation.  `kbledcylon` is a simple program that shows a red 'Cylon' chace pattern across the top row of keys.  This is mostly there as a simple starting point to implement your own program to talk to `kbled`. 
 
 ## Compatibility
 This software should work with any linux system with a ITE IT-829x USB keyboard controller.  If you are unsure, just look for device ID `048d:8910` with lsusb.  If it shows up on the list, then there is a good chance this software will work.  I have tested this with my System76 Bonobo WS (bonw15) laptop running Pop!_OS 22.04 LTS.  It is manufactured by Clevo as an X370SNW.  Here is how the device appears when I run `lsusb`:
@@ -13,7 +14,7 @@ Bus 001 Device 005: ID 048d:8910 Integrated Technology Express, Inc. ITE Device(
 ```
 
 ### `kbled` daemon:
-This program is designed to be launched during system startup by systemd with the included `kbled.service`, though it can be run manually to verify it works before installation and for debugging.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock keys will be when active) by specifying them sequentially from the command line.  The default if nothing specified on the command line is a blank (0,0,0) backlight and a and a green (0,127,0) focus color. 
+This program is designed to be a lightweight daemon launched during system startup by systemd with the included `kbled.service`, though it can be run manually to verify it works before installation and for debugging.  If you want to run it manually, it must be run as root, so execute it with `sudo kbled` from the command line.  (If you have just compiled the program but haven't installed it, cd to the directory from which it was compiled ex: `cd ~/kbled` followed by `sudo ./kbled`) Optionally it can be called with command line arguments to set the default backlight color and backlight focus color (the color caps lock/num lock/scroll lock keys will be when active) by specifying them sequentially from the command line.  The default if nothing specified on the command line is a blank (0,0,0) backlight and a and a green (0,127,0) focus color. 
 
 Syntax: 
 ```
@@ -24,7 +25,7 @@ Example: sets the backlight color to 1/4 brightness green and the focus color to
 sudo kbled 0 63 0 255 0 0
 ``` 
 
-It sets up a shared memory space that `kbledclient` (called from an unprivileged account) can interact with to modify the keyboard led settings along with a semaphore for accessing the array.  The default scan time is 100 ms (dynamically updatable through `kbledclient` or permanently in the `kbled` source code) so the max delay between hitting the caps lock key and the color changing should be 100 ms plus whatever delay is present due to the `IT829x` controller.
+It sets up a shared memory space that `kbledclient` (called from an unprivileged account) can interact with to modify the keyboard led settings along with a semaphore for accessing the array.  The default scan time is 100 ms (dynamically updatable through `kbledclient` or permanently in the `kbled` source code) so the max delay between hitting the caps lock key and the color changing should be 100 ms plus whatever delay is present due to the `IT829x` controller.  `kbledclient` and other programs can interact with `kbled` to change the state of LEDs, it just handles updating color based upon caps lock, num lock and scroll lock keys and waits for updates to its shared memory array from external sources to write those changes to the keyboard LED state.
 
 ### `kbledclient` user space client:
 This program interacts with the running `kbled` daemon to modify the LED configuration of the keyboard.  The LEDs can be changed all together by changing the backlight and focus colors or on a per-key basis.  Here are the command line parameters:
@@ -56,6 +57,36 @@ Usage: kbledclient [parameters...]
  -h or --help                 Display this message
  Where <Red> <Grn> <Blu> are 0-255
 ```
+Keys are numbered from left to right starting at the top left `Esc` key incrementing to 113 for the bottom numpad `Enter` key.  Keep in mind that the `Backspace`, `Tab`, `\`, `Num +`, `Caps Lock`, `Enter`, `L Shift`, `R Shfit`, `L Ctrl`, `R Ctrl` and `Num Enter` have 2 LEDs per key.  The `Space` key has 4 sequential LEDs.  The `Num +` and `Num Enter` key LEDs are in their respective rows so they are not sequential.  
+
+### `kbledpsmon` utility for viewing current processor/core load, memory/swap utilization and network saturation
+Real-time display of each processor core's load, overall memory/swap utilization and network staturation can be displayed by `kbledpsmon`.  Here are the command line options:
+```text
+Usage: kbledpsmon [parameters...]
+Example: kbledpsmon -n wlp0s20f3 -r -s
+ Parameter:                    Description:
+ -u or --update <msec>         Update process load frequency (100 to 65535 ms)  Default=200 ms
+ -n or --network <interface>   Display network load on /dev/<interface> e.g. eth0 for /dev/eth0
+ -b or --bandwidth <mbits>     Define max bandwith of device specified by -n, otherwise determined automatically
+ -r or --ram                   Show RAM saturation
+ -s or --swap                  Show swap saturation
+ -cpu                          Display the time it took kbled daemon to execute the last update
+ -v                            Verbose output
+ --scan                        Change keyboard update speed (1 to 65535 ms) default= 100 ms
+ --dump                        Show contents of shared memory
+ --dump+                       Show contents of shared memory with each key's state
+ -h or --help                  Display this message
+```
+The cpu core load is presented by default on keys 0 to n where n is the number of cores, up to the maximum number of cores or keys on the keyboard.  Network saturation and ram/swap utilization is mapped to the default keys below.  Eventually this will be configurable in `kbled.conf`, but for now it is only changeable in the source code in `psmon.c`.  
+![kbledpsmon default key assignments](doc/img/bonw15kbledpsmon.svg)
+The color gradient goes from 0% to 100% by transitioning from blue (0%) to green (50%) and then green to red(100%) for CPU saturation.  In the case of network, ram and swap, the color represents the relative interval of the key.  Ex: ram utilization is indicated by 5 keys (20% utilization per key) and is currently at 50% utilization, this would mean that RAM1 and RAM2 are red with RAM3 green along with RAM4 and RAM5 blue.  for 30% ram utilization, RAM1 will be red, RAM2 will be green and RAM3,RAM4 and RAM5 will be blue.
+![Key color gradient (0%->100%)](doc/img/KeyColorGradient.svg)
+
+### `kbledcolorpicker` utility: shell script to dynamically choose backlight and focus colors
+This shell script (lives in `utils/kbledcolorpicker.sh`) can be used to interactively find a backlight and focus color that you like.  Call it with no arguments to default to backlight=(127,127,127) and focus=(127,63,63).  Call with 6 arguments to specify a starting color: `kbledcolorpicker <Bred> <Bgrn> <Bblu> <Fred> <Fgrn> <Fblu>`.  To switch between backlight or focus, press `b` or `f` respectively.  To increase/decrease red press 7 and 4, green press 8 and 5, and blue 9 and 6 on the numeric keypad respectively.  To increase or decrease the step size by a color increment/decrement press 3 or 2 repectively.  Press q to quit.
+![Key color gradient (0%->100%)](doc/img/kbledcolorpicker.svg)
+### `kbledcylon` utility: basis for your own utility and a silly animation
+This program animates a 'Cylon' scanning pattern across the topmost row of keys.  Its pretty pointless, but it provides simple example code fo you to make your own dynamic keyboard LED program.  Just delete any variables relating to 'cylon' and update the code between "Your code goes below here" and "Your code goes above here".  Another good reference is the `client.c` source that more thoroughly implements all of the possible updates to the share memory array.  Includes `sharedmem.h` and must be compiled with `sharedmem.c`.  Ex: gcc -o executablename cylon.c sharedmem.c 
 
 ### `semsnoop` utility for checking semaphore status:
 I'll confess I basically just asked ChatGPT to write me a c program to check the status of the semaphore I used in `kbled` and `kbledclient` to aid in debugging.  Call it without arguments to get the syntax:
@@ -81,7 +112,7 @@ Semaphore value: 0
 ```
 
 ## Installing from .deb package (easiest)
-You will need to install the dependencies and download one of the .deb releases from github.  The latest release can be found [here](https://github.com/chememjc/kbled/releases).  Click on the assets dropdown and download the .deb binary package.  The installation can be completed with the following sequence of commands from the directory where you downloaded the .deb file (`~/Downloads` in this example):
+You will need to install the dependencies and download one of the .deb releases from github.  The latest release can be found [here](https://github.com/chememjc/kbled/releases/latest).  Click on the assets dropdown and download the .deb binary package.  The installation can be completed with the following sequence of commands from the directory where you downloaded the .deb file (`~/Downloads` in this example):
 ```bash
 cd ~/Downloads
 sudo apt update
@@ -199,6 +230,9 @@ Here is how I have it setup on my computer, feel free to configure to your likin
 |                     |                     |          |
 
 *`*` denotes the new function corresponds to the original key function*
+Resulting keyboard shortcut map:
+![New Hotkey Mapping](doc/img/bonw15hotkeys.svg)
+
 
 # More Detail:
 ## Background
